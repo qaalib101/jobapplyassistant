@@ -8,6 +8,9 @@ function shouldGenerate(field: FieldMetadata, existing: Suggestion[]) {
   if (existing.some((suggestion) => suggestion.fieldId === field.fieldId)) return false;
   if (field.type !== "textarea" && field.type !== "text") return false;
   const label = [field.label, field.name, field.placeholder].filter(Boolean).join(" ");
+  if (/\b(gender|race|ethnicity|disability|veteran|birth|ssn|social security)\b/i.test(label)) {
+    return false;
+  }
   return /\b(why|describe|tell us|cover letter|additional|summary|experience|interest)\b/i.test(
     label,
   );

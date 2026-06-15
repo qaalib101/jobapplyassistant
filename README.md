@@ -117,6 +117,29 @@ Paste a broad context document with details the AI should use, such as:
 
 This is stored locally in Postgres and included when the backend drafts answers for uncommon application questions.
 
+## Demo Forms
+
+Open:
+
+```text
+http://jobapply.localhost:8080/demos/
+```
+
+The demo pages provide local application forms for:
+
+- Greenhouse-style single-page applications
+- Lever-style compact applications
+- Workday-style step pages
+
+Use these pages to demonstrate the extension flow without submitting anything to an external ATS:
+
+1. Open a demo form.
+2. Open the extension side panel.
+3. Click **Scan page**.
+4. Review and edit suggestions.
+5. Select fields to fill.
+6. Click **Fill selected**.
+
 ## AI Providers
 
 Configure providers in `.env`.

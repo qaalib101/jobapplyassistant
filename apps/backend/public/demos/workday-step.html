@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workday Step Demo</title>
+    <link rel="stylesheet" href="/demos/demo.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Workday-style Step: Application Questions</h1>
+        <p>Use this page to demonstrate per-page snapshots and manual next-step behavior.</p>
+      </header>
+
+      <form>
+        <div class="grid">
+          <label>
+            <span>Legal Name</span>
+            <input name="legalName" autocomplete="name" required />
+          </label>
+
+          <label>
+            <span>Primary Email</span>
+            <input type="email" name="primaryEmail" autocomplete="email" required />
+          </label>
+
+          <label>
+            <span>Website</span>
+            <input type="url" name="candidateWebsite" />
+          </label>
+
+          <label>
+            <span>Salary Expectations</span>
+            <input name="salaryExpectations" />
+          </label>
+
+          <label>
+            <span>Are you authorized to work where this role is located?</span>
+            <select name="authorizedToWork">
+              <option value="">Select one</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Do you require employer sponsorship?</span>
+            <select name="employerSponsorship">
+              <option value="">Select one</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+
+          <label class="full">
+            <span>Describe your relevant experience for this role</span>
+            <textarea name="relevantExperience"></textarea>
+          </label>
+        </div>
+
+        <div class="actions">
+          <a class="button secondary" href="/demos/">Back</a>
+          <button class="secondary" type="button">Previous</button>
+          <button type="button">Next</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

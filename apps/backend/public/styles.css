@@ -37,6 +37,11 @@ a {
   text-decoration: none;
 }
 
+nav {
+  display: flex;
+  gap: 14px;
+}
+
 .panel {
   border: 1px solid #d8dee6;
   border-radius: 8px;

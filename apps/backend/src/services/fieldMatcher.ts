@@ -23,6 +23,18 @@ const profileFieldMap: Array<{
   },
 ];
 
+const sensitiveGeneratedSkip = [
+  "gender",
+  "race",
+  "ethnicity",
+  "disability",
+  "veteran",
+  "date of birth",
+  "birth date",
+  "ssn",
+  "social security",
+];
+
 function fieldText(field: FieldMetadata) {
   return normalizeText(
     [field.label, field.name, field.id, field.placeholder].filter(Boolean).join(" "),
@@ -41,9 +53,54 @@ function optionValue(field: FieldMetadata, suggestedValue: string): string {
   const match = field.options.find(
     (option) =>
       normalizeText(option.label) === normalizedSuggestion ||
-      normalizeText(option.value) === normalizedSuggestion,
+      normalizeText(option.value) === normalizedSuggestion ||
+      yesNoToken(option.label) === yesNoToken(suggestedValue) ||
+      yesNoToken(option.value) === yesNoToken(suggestedValue),
   );
   return match?.value ?? suggestedValue;
+}
+
+function yesNoToken(value: string | null | undefined): "yes" | "no" | null {
+  const normalized = normalizeText(value);
+  if (["yes", "y", "true"].includes(normalized)) return "yes";
+  if (["no", "n", "false"].includes(normalized)) return "no";
+  return null;
+}
+
+function booleanSuggestion(value: boolean | null | undefined) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return null;
+}
+
+function fieldHasAny(text: string, tokens: string[]) {
+  return tokens.some((token) => text.includes(normalizeText(token)));
+}
+
+function answerScore(fieldTextValue: string, answer: {
+  question_key?: string | null;
+  question_text: string;
+  tags?: unknown;
+}) {
+  const question = normalizeText(answer.question_text);
+  const key = normalizeText(answer.question_key);
+  const tagText = Array.isArray(answer.tags)
+    ? normalizeText(answer.tags.join(" "))
+    : normalizeText(JSON.stringify(answer.tags ?? ""));
+  const searchText = [question, key, tagText].filter(Boolean).join(" ");
+
+  if (!searchText) return 0;
+  if (question.includes(fieldTextValue) || fieldTextValue.includes(question)) return 0.92;
+  if (key && fieldTextValue.includes(key)) return 0.88;
+
+  const fieldTokens = new Set(fieldTextValue.split(" ").filter((token) => token.length > 2));
+  const answerTokens = new Set(searchText.split(" ").filter((token) => token.length > 2));
+  const overlap = Array.from(fieldTokens).filter((token) => answerTokens.has(token)).length;
+  return overlap / Math.max(4, fieldTokens.size);
+}
+
+function shouldSkipField(text: string) {
+  return sensitiveGeneratedSkip.some((token) => text.includes(normalizeText(token)));
 }
 
 export async function deterministicSuggestions(
@@ -65,6 +122,7 @@ export async function deterministicSuggestions(
   for (const field of fields) {
     const text = fieldText(field);
     if (!text || field.type === "file") continue;
+    if (shouldSkipField(text)) continue;
 
     for (const mapping of profileFieldMap) {
       if (!mapping.tokens.some((token) => text.includes(normalizeText(token)))) continue;
@@ -92,15 +150,36 @@ export async function deterministicSuggestions(
 
     if (suggestions.some((suggestion) => suggestion.fieldId === field.fieldId)) continue;
 
-    const answerMatch = answerResult.rows.find((answer) => {
-      const question = normalizeText(answer.question_text);
-      const key = normalizeText(answer.question_key);
-      return (
-        question.includes(text) ||
-        text.includes(question) ||
-        Boolean(key && text.includes(key))
-      );
-    });
+    if (
+      fieldHasAny(text, ["sponsorship", "visa sponsor", "employer sponsorship"]) &&
+      profile.sponsorship_required !== null &&
+      profile.sponsorship_required !== undefined
+    ) {
+      const value = booleanSuggestion(Boolean(profile.sponsorship_required));
+      if (value) {
+        suggestions.push({
+          fieldId: field.fieldId,
+          fieldLabel: field.label,
+          fieldType: field.type,
+          suggestedValue: optionValue(field, value),
+          confidence: 0.9,
+          sourceType: "UserProfile",
+          sourceIds: [userProfileId],
+          sourceContext: {
+            matched: "sponsorship required",
+            column: "sponsorship_required",
+          },
+          isGenerated: false,
+          requiresUserReview: true,
+        });
+        continue;
+      }
+    }
+
+    const answerMatch = answerResult.rows
+      .map((answer) => ({ answer, score: answerScore(text, answer) }))
+      .filter((item) => item.score >= 0.35)
+      .sort((left, right) => right.score - left.score)[0]?.answer;
 
     if (answerMatch) {
       suggestions.push({

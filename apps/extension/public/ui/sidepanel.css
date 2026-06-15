@@ -114,6 +114,8 @@ button:disabled {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
   margin: 10px 0;
 }
@@ -129,16 +131,42 @@ button:disabled {
   margin-top: 4px;
 }
 
+.suggestion.muted {
+  color: #627386;
+  background: #fafbfc;
+}
+
 .field-label {
   font-weight: 650;
 }
 
 .value {
+  width: 100%;
+  border: 1px solid #c8d1dc;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
   margin: 6px 0;
+  padding: 8px;
+}
+
+textarea.value {
+  min-height: 82px;
+  resize: vertical;
   white-space: pre-wrap;
+}
+
+input.value {
+  min-height: 36px;
 }
 
 .source {
   color: #435466;
   font-size: 12px;
+}
+
+.generated-warning {
+  color: #8a5200;
+  font-size: 12px;
+  margin-top: 4px;
 }

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job Apply Assistant Demos</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .demo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+      }
+
+      .demo-card {
+        border: 1px solid #d8dee6;
+        border-radius: 8px;
+        background: white;
+        padding: 16px;
+      }
+
+      .demo-card h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Demo Application Forms</h1>
+          <p>Use these local pages to test scanning, review, editing, and filling.</p>
+        </div>
+        <nav>
+          <a href="/">Context</a>
+          <a href="/api/health">API</a>
+        </nav>
+      </header>
+
+      <section class="demo-grid">
+        <article class="demo-card">
+          <h2>Greenhouse-style</h2>
+          <p>Single-page application with profile fields, links, authorization, and a long answer.</p>
+          <a href="/demos/greenhouse.html">Open demo</a>
+        </article>
+
+        <article class="demo-card">
+          <h2>Lever-style</h2>
+          <p>Compact form with contact details, location, portfolio, and sponsorship questions.</p>
+          <a href="/demos/lever.html">Open demo</a>
+        </article>
+
+        <article class="demo-card">
+          <h2>Workday-style step</h2>
+          <p>Multi-step-feeling page with application questions and manual navigation controls.</p>
+          <a href="/demos/workday-step.html">Open demo</a>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

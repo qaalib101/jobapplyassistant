@@ -43,11 +43,16 @@ let activeTabId: number | undefined;
 let activeSession: ApplicationSession | undefined;
 let pageSnapshotId: string | undefined;
 let suggestions: Suggestion[] = [];
+let detectedFields: FieldMetadata[] = [];
 
 const scanButton = document.querySelector<HTMLButtonElement>("#scanButton");
 const fillButton = document.querySelector<HTMLButtonElement>("#fillButton");
 const collapseButton = document.querySelector<HTMLButtonElement>("#collapseButton");
 const expandButton = document.querySelector<HTMLButtonElement>("#expandButton");
+const selectHighConfidenceButton = document.querySelector<HTMLButtonElement>(
+  "#selectHighConfidenceButton",
+);
+const clearSelectionButton = document.querySelector<HTMLButtonElement>("#clearSelectionButton");
 const collapsedView = document.querySelector<HTMLElement>("#collapsedView");
 const expandedView = document.querySelector<HTMLElement>("#expandedView");
 const statusElement = document.querySelector<HTMLElement>("#status");
@@ -128,15 +133,23 @@ function renderSuggestions() {
     checkbox.type = "checkbox";
     checkbox.name = "field";
     checkbox.value = suggestion.fieldId;
+    checkbox.checked = suggestion.confidence >= 0.9 && !suggestion.isGenerated;
 
     const body = document.createElement("div");
     const title = document.createElement("div");
     title.className = "field-label";
     title.textContent = suggestion.fieldLabel || suggestion.fieldId;
 
-    const value = document.createElement("div");
+    const value =
+      suggestion.fieldType === "textarea"
+        ? document.createElement("textarea")
+        : document.createElement("input");
     value.className = "value";
-    value.textContent = suggestion.suggestedValue;
+    value.dataset.fieldId = suggestion.fieldId;
+    value.value = suggestion.suggestedValue;
+    if (value instanceof HTMLInputElement) {
+      value.type = "text";
+    }
 
     const source = document.createElement("div");
     source.className = "source";
@@ -146,9 +159,59 @@ function renderSuggestions() {
     }`;
 
     body.append(title, value, source);
+    if (suggestion.isGenerated) {
+      const warning = document.createElement("div");
+      warning.className = "generated-warning";
+      warning.textContent = "Generated draft. Edit and review before filling.";
+      body.append(warning);
+    }
     row.append(checkbox, body);
     suggestionsElement.append(row);
   }
+
+  const suggestedFieldIds = new Set(suggestions.map((suggestion) => suggestion.fieldId));
+  for (const field of detectedFields.filter((item) => !suggestedFieldIds.has(item.fieldId))) {
+    const row = document.createElement("div");
+    row.className = "suggestion muted";
+
+    const spacer = document.createElement("span");
+    const body = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "field-label";
+    title.textContent = field.label || field.name || field.fieldId;
+
+    const source = document.createElement("div");
+    source.className = "source";
+    source.textContent = "Detected field · no saved suggestion";
+
+    body.append(title, source);
+    row.append(spacer, body);
+    suggestionsElement.append(row);
+  }
+}
+
+function reviewedValue(fieldId: string) {
+  const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    `.value[data-field-id="${CSS.escape(fieldId)}"]`,
+  );
+  return input?.value ?? "";
+}
+
+function setAllSelections(selected: boolean) {
+  document
+    .querySelectorAll<HTMLInputElement>('input[name="field"]')
+    .forEach((input) => {
+      input.checked = selected;
+    });
+}
+
+function selectHighConfidence() {
+  document
+    .querySelectorAll<HTMLInputElement>('input[name="field"]')
+    .forEach((input) => {
+      const suggestion = suggestions.find((item) => item.fieldId === input.value);
+      input.checked = Boolean(suggestion && suggestion.confidence >= 0.85 && !suggestion.isGenerated);
+    });
 }
 
 async function scanPage() {
@@ -162,6 +225,7 @@ async function scanPage() {
     const scan = await chrome.tabs.sendMessage<unknown, ScanResult>(tab.id!, {
       type: "SCAN_VISIBLE_FIELDS",
     });
+    detectedFields = scan.fields;
 
     setStatus(`Found ${scan.fields.length} visible fields. Resolving session...`);
 
@@ -202,7 +266,7 @@ async function scanPage() {
     setStatus(
       suggestions.length
         ? "Review suggestions and select fields to fill."
-        : "No suggestions found for this page.",
+        : `Found ${scan.fields.length} fields, but no suggestions yet.`,
     );
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Scan failed.");
@@ -234,7 +298,7 @@ async function fillSelected(event: SubmitEvent) {
       type: "FILL_SELECTED_FIELDS",
       fields: selectedSuggestions.map((suggestion) => ({
         fieldId: suggestion.fieldId,
-        value: suggestion.suggestedValue,
+        value: reviewedValue(suggestion.fieldId),
       })),
     });
 
@@ -245,7 +309,7 @@ async function fillSelected(event: SubmitEvent) {
         fields: selectedSuggestions.map((suggestion) => ({
           fieldId: suggestion.fieldId,
           fieldLabel: suggestion.fieldLabel,
-          filledValue: suggestion.suggestedValue,
+          filledValue: reviewedValue(suggestion.fieldId),
         })),
       }),
     });
@@ -262,4 +326,6 @@ scanButton?.addEventListener("click", scanPage);
 suggestionsForm?.addEventListener("submit", fillSelected);
 collapseButton?.addEventListener("click", () => setCollapsed(true));
 expandButton?.addEventListener("click", () => setCollapsed(false));
+selectHighConfidenceButton?.addEventListener("click", selectHighConfidence);
+clearSelectionButton?.addEventListener("click", () => setAllSelections(false));
 restoreCollapsedState();

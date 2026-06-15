@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lever Demo Application</title>
+    <link rel="stylesheet" href="/demos/demo.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Full Stack Engineer</h1>
+        <p>Lever-style local demo with common profile and eligibility fields.</p>
+      </header>
+
+      <form>
+        <div class="grid">
+          <label class="full">
+            <span>Full name</span>
+            <input name="name" autocomplete="name" required />
+          </label>
+
+          <label>
+            <span>Email address</span>
+            <input type="email" name="email" autocomplete="email" required />
+          </label>
+
+          <label>
+            <span>Phone number</span>
+            <input type="tel" name="phone" autocomplete="tel" />
+          </label>
+
+          <label>
+            <span>LinkedIn URL</span>
+            <input type="url" name="urls[LinkedIn]" />
+          </label>
+
+          <label>
+            <span>GitHub URL</span>
+            <input type="url" name="urls[GitHub]" />
+          </label>
+
+          <label>
+            <span>Location</span>
+            <input name="location" />
+          </label>
+
+          <label>
+            <span>Desired start date</span>
+            <input name="start_date" placeholder="Immediately, 2 weeks, or a date" />
+          </label>
+
+          <fieldset class="full">
+            <legend>Do you require sponsorship to work in the United States?</legend>
+            <label class="choice"><input type="radio" name="requires_sponsorship" value="yes" /> Yes</label>
+            <label class="choice"><input type="radio" name="requires_sponsorship" value="no" /> No</label>
+          </fieldset>
+
+          <label class="full">
+            <span>Tell us about a project you are proud of</span>
+            <textarea name="project_summary"></textarea>
+          </label>
+        </div>
+
+        <div class="actions">
+          <a class="button secondary" href="/demos/">Back</a>
+          <button type="button">Submit manually</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>
