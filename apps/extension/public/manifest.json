@@ -3,8 +3,9 @@
   "name": "Job Apply Assistant",
   "version": "0.1.0",
   "description": "Click-to-assist job application form filling with user review.",
-  "permissions": ["activeTab", "storage", "sidePanel", "scripting"],
+  "permissions": ["activeTab", "storage", "sidePanel", "scripting", "permissions"],
   "host_permissions": ["http://jobapply.localhost:8080/*", "http://localhost:4317/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "background/serviceWorker.js"
   },

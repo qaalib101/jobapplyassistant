@@ -105,6 +105,26 @@ async function activeTab() {
   return tab;
 }
 
+function hostPatternForUrl(tabUrl?: string) {
+  if (!tabUrl) throw new Error("This tab does not expose a URL the extension can access.");
+  const url = new URL(tabUrl);
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("The extension can only scan http and https pages.");
+  }
+  return `${url.protocol}//${url.host}/*`;
+}
+
+async function ensurePagePermission(tab: chrome.tabs.Tab) {
+  const origin = hostPatternForUrl(tab.url);
+  const alreadyGranted = await chrome.permissions.contains({ origins: [origin] });
+  if (alreadyGranted) return;
+
+  const granted = await chrome.permissions.request({ origins: [origin] });
+  if (!granted) {
+    throw new Error(`Permission is required to scan ${origin}`);
+  }
+}
+
 async function ensureContentScripts(tabId: number) {
   await chrome.scripting.executeScript({
     target: { tabId },
@@ -221,6 +241,7 @@ async function scanPage() {
 
   try {
     const tab = await activeTab();
+    await ensurePagePermission(tab);
     await ensureContentScripts(tab.id!);
     const scan = await chrome.tabs.sendMessage<unknown, ScanResult>(tab.id!, {
       type: "SCAN_VISIBLE_FIELDS",
