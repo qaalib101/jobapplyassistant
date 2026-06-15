@@ -18,7 +18,15 @@ app.use(
         callback(null, true);
         return;
       }
+      if (origin === config.publicBaseUrl) {
+        callback(null, true);
+        return;
+      }
       if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      if (/^https?:\/\/jobapply\.localhost(:\d+)?$/.test(origin)) {
         callback(null, true);
         return;
       }

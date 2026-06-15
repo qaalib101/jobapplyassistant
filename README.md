@@ -68,12 +68,12 @@ Create local environment config:
 cp .env.example .env
 ```
 
-The default local Postgres port is `5433` so it does not conflict with other projects using `5432`.
+The default local Postgres port is `5433` so it does not conflict with other projects using `5432`. The browser-facing local URL goes through Caddy at `http://jobapply.localhost:8080`.
 
-Start Postgres:
+Start Postgres and Caddy:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres caddy
 ```
 
 Run migrations:
@@ -91,15 +91,17 @@ npm run dev:backend
 The API and context UI run at:
 
 ```text
-http://localhost:4317
+http://jobapply.localhost:8080
 ```
+
+The raw backend still listens on `http://localhost:4317`; Caddy proxies browser traffic to it.
 
 ## AI Context UI
 
 Open:
 
 ```text
-http://localhost:4317/
+http://jobapply.localhost:8080/
 ```
 
 Paste a broad context document with details the AI should use, such as:
@@ -174,6 +176,12 @@ dist/apps/extension
 6. Select `dist/apps/extension`.
 
 The extension opens as a side panel. It can be collapsed into a compact `JAA` button and expanded again.
+
+By default, the extension calls:
+
+```text
+http://jobapply.localhost:8080
+```
 
 ## Useful API Routes
 

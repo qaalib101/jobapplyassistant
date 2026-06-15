@@ -1,0 +1,3 @@
+http://jobapply.localhost {
+  reverse_proxy {$BACKEND_UPSTREAM:host.docker.internal:4317}
+}

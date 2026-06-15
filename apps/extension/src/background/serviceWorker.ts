@@ -3,5 +3,5 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.set({ backendBaseUrl: "http://localhost:4317" });
+  chrome.storage.local.set({ backendBaseUrl: "http://jobapply.localhost:8080" });
 });

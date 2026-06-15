@@ -74,7 +74,7 @@ async function restoreCollapsedState() {
 
 async function backendBaseUrl() {
   const stored = await chrome.storage.local.get("backendBaseUrl");
-  return stored.backendBaseUrl || "http://localhost:4317";
+  return stored.backendBaseUrl || "http://jobapply.localhost:8080";
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {

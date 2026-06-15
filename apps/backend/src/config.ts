@@ -8,6 +8,7 @@ export const config = {
     process.env.DATABASE_URL ??
     "postgres://jobapply:jobapply_dev@localhost:5433/jobapplyassistant",
   extensionOrigin: process.env.EXTENSION_ORIGIN,
+  publicBaseUrl: process.env.PUBLIC_BASE_URL ?? "http://jobapply.localhost:8080",
   aiProvider: process.env.AI_PROVIDER ?? "deepseek",
   aiFallbackProvider: process.env.AI_FALLBACK_PROVIDER ?? "mock",
   aiTimeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 20000),

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Click-to-assist job application form filling with user review.",
   "permissions": ["activeTab", "storage", "sidePanel", "scripting"],
-  "host_permissions": ["http://localhost:4317/*"],
+  "host_permissions": ["http://jobapply.localhost:8080/*", "http://localhost:4317/*"],
   "background": {
     "service_worker": "background/serviceWorker.js"
   },
