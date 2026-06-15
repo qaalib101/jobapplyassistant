@@ -1,0 +1,144 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #1f2933;
+  background: #f7f8fa;
+  font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+main {
+  min-width: 320px;
+  padding: 14px;
+}
+
+body.collapsed {
+  background: transparent;
+}
+
+body.collapsed main {
+  min-width: 72px;
+  padding: 10px;
+}
+
+.collapsed-view {
+  display: grid;
+  min-height: 92px;
+  place-items: start center;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+button {
+  border: 1px solid #1f2933;
+  border-radius: 6px;
+  background: #1f2933;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondary-button {
+  border-color: #c8d1dc;
+  background: white;
+  color: #1f2933;
+}
+
+.icon-button {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border-color: #20c997;
+  background: #20c997;
+  color: #0b2b22;
+  font-weight: 800;
+  padding: 0;
+}
+
+.context-link {
+  display: inline-block;
+  margin-top: 3px;
+  color: #175cd3;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.status,
+.session,
+.suggestion {
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: white;
+  padding: 10px;
+}
+
+.status {
+  margin-bottom: 10px;
+}
+
+.session {
+  margin-bottom: 10px;
+}
+
+.label,
+.meta {
+  color: #627386;
+  font-size: 12px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 10px 0;
+}
+
+.suggestion {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.suggestion input[type="checkbox"] {
+  margin-top: 4px;
+}
+
+.field-label {
+  font-weight: 650;
+}
+
+.value {
+  margin: 6px 0;
+  white-space: pre-wrap;
+}
+
+.source {
+  color: #435466;
+  font-size: 12px;
+}

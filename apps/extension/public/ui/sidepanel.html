@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job Apply Assistant</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <main>
+      <section id="collapsedView" class="collapsed-view" hidden>
+        <button id="expandButton" class="icon-button" type="button" title="Expand">JAA</button>
+      </section>
+
+      <section id="expandedView">
+        <header>
+          <div>
+            <h1>Job Apply Assistant</h1>
+            <a class="context-link" href="http://localhost:4317/" target="_blank">Context</a>
+          </div>
+          <div class="header-actions">
+            <button id="collapseButton" class="secondary-button" type="button">Collapse</button>
+            <button id="scanButton" type="button">Scan page</button>
+          </div>
+        </header>
+
+        <section id="status" class="status">Open an application page and scan when ready.</section>
+
+        <section id="session" class="session" hidden>
+          <div class="label">Session</div>
+          <div id="sessionText"></div>
+        </section>
+
+        <form id="suggestionsForm" hidden>
+          <div class="toolbar">
+            <button id="fillButton" type="submit">Fill selected</button>
+          </div>
+          <div id="suggestions"></div>
+        </form>
+      </section>
+    </main>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

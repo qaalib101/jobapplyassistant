@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Job Apply Assistant",
+  "version": "0.1.0",
+  "description": "Click-to-assist job application form filling with user review.",
+  "permissions": ["activeTab", "storage", "sidePanel", "scripting"],
+  "host_permissions": ["http://localhost:4317/*"],
+  "background": {
+    "service_worker": "background/serviceWorker.js"
+  },
+  "side_panel": {
+    "default_path": "ui/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Job Apply Assistant"
+  }
+}
