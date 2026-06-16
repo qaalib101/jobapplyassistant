@@ -90,7 +90,6 @@ function setStatus(text: string) {
 
 function setBusy(busy: boolean, text?: string) {
   document.body.classList.toggle("is-busy", busy);
-  if (statusSpinner) statusSpinner.hidden = !busy;
   if (text) setStatus(text);
 
   [
@@ -107,6 +106,11 @@ function setBusy(busy: boolean, text?: string) {
   });
 }
 
+function setAnswerLoading(loading: boolean, text?: string) {
+  if (statusSpinner) statusSpinner.hidden = !loading;
+  if (text) setStatus(text);
+}
+
 function setResumeStatus(text: string) {
   if (resumeStatus) resumeStatus.textContent = text;
 }
@@ -115,12 +119,11 @@ async function setCollapsed(collapsed: boolean) {
   document.body.classList.toggle("collapsed", collapsed);
   if (collapsedView) collapsedView.hidden = !collapsed;
   if (expandedView) expandedView.hidden = collapsed;
-  await chrome.storage.local.set({ sidePanelCollapsed: collapsed });
 }
 
 async function restoreCollapsedState() {
-  const stored = await chrome.storage.local.get("sidePanelCollapsed");
-  await setCollapsed(Boolean(stored.sidePanelCollapsed));
+  await chrome.storage.local.remove("sidePanelCollapsed");
+  await setCollapsed(false);
 }
 
 async function backendBaseUrl() {
@@ -316,7 +319,8 @@ async function saveResume() {
   }
 
   saveResumeButton?.setAttribute("disabled", "true");
-  setBusy(true, "Saving resume...");
+  saveResumeButton?.setAttribute("disabled", "true");
+  setStatus("Saving resume...");
   setResumeStatus("Saving resume...");
   try {
     const saved = await api<{ id: string; label: string }>("/resume-versions", {
@@ -332,7 +336,7 @@ async function saveResume() {
   } catch (error) {
     setResumeStatus(error instanceof Error ? error.message : "Could not save resume.");
   } finally {
-    setBusy(false);
+    saveResumeButton?.removeAttribute("disabled");
   }
 }
 
@@ -347,7 +351,8 @@ async function tailorResumeFromScan() {
   }
 
   tailorResumeButton?.setAttribute("disabled", "true");
-  setBusy(true, "Tailoring resume from scanned job description...");
+  tailorResumeButton?.setAttribute("disabled", "true");
+  setStatus("Tailoring resume from scanned job description...");
   setResumeStatus("Tailoring resume from scanned job description...");
   try {
     const response = await api<{
@@ -370,7 +375,7 @@ async function tailorResumeFromScan() {
   } catch (error) {
     setResumeStatus(error instanceof Error ? error.message : "Could not tailor resume.");
   } finally {
-    setBusy(false);
+    tailorResumeButton?.removeAttribute("disabled");
   }
 }
 
@@ -402,7 +407,8 @@ async function loadLatestResume() {
 
 async function scanPage() {
   if (!scanButton) return;
-  setBusy(true, "Scanning visible fields...");
+  scanButton.disabled = true;
+  setStatus("Scanning visible fields...");
 
   try {
     const tab = await activeTab();
@@ -442,7 +448,7 @@ async function scanPage() {
     );
     pageSnapshotId = snapshot.id;
 
-    setStatus("Matching saved answers and generating AI drafts...");
+    setAnswerLoading(true, "Getting AI answers...");
     const response = await api<{ suggestions: Suggestion[]; contextSummary?: ContextSummary }>(
       `/application-sessions/${activeSession.id}/suggestions`,
       {
@@ -454,6 +460,7 @@ async function scanPage() {
         }),
       },
     );
+    setAnswerLoading(false);
     suggestions = response.suggestions;
     contextSummary = response.contextSummary;
     renderSession(activeSession);
@@ -464,9 +471,10 @@ async function scanPage() {
         : `Found ${scan.fields.length} fields, but no suggestions yet.`,
     );
   } catch (error) {
+    setAnswerLoading(false);
     setStatus(error instanceof Error ? error.message : "Scan failed.");
   } finally {
-    setBusy(false);
+    scanButton.disabled = false;
   }
 }
 
@@ -479,7 +487,9 @@ async function fillSuggestions(fillAll = false) {
     return;
   }
 
-  setBusy(true, fillAll ? "Filling all reviewed suggestions..." : "Filling selected fields...");
+  fillButton?.setAttribute("disabled", "true");
+  fillAllButton?.setAttribute("disabled", "true");
+  setStatus(fillAll ? "Filling all reviewed suggestions..." : "Filling selected fields...");
 
   try {
     await chrome.tabs.sendMessage(lockedTabId(), {
@@ -506,7 +516,8 @@ async function fillSuggestions(fillAll = false) {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Fill failed.");
   } finally {
-    setBusy(false);
+    fillButton?.removeAttribute("disabled");
+    fillAllButton?.removeAttribute("disabled");
   }
 }
 
