@@ -73,6 +73,14 @@ function booleanSuggestion(value: boolean | null | undefined) {
   return null;
 }
 
+function isPlaceholderProfileValue(value: string) {
+  return (
+    /@example\./i.test(value) ||
+    /^555[-.\s]?0?100$/.test(value.trim()) ||
+    /^https?:\/\/qaalib\.dev\/?$/i.test(value.trim())
+  );
+}
+
 function fieldHasAny(text: string, tokens: string[]) {
   return tokens.some((token) => text.includes(normalizeText(token)));
 }
@@ -135,6 +143,7 @@ export async function deterministicSuggestions(
       if (!raw) continue;
 
       let value = String(raw);
+      if (isPlaceholderProfileValue(value)) continue;
       if (mapping.label === "first name") value = splitName(value, "first");
       if (mapping.label === "last name") value = splitName(value, "last");
 

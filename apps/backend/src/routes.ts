@@ -5,6 +5,7 @@ import { prisma } from "./db/prisma";
 import { config } from "./config";
 import { listProviders, getProvider } from "./providers";
 import { createSuggestions } from "./services/suggestionService";
+import { syncProfileFromContext } from "./services/profileContextSync";
 import { canonicalizeUrl, hashValue, hostname, redactValue } from "./utils/text";
 
 const router = express.Router();
@@ -180,6 +181,7 @@ router.put("/context", async (req, res, next) => {
         is_active: true,
       },
     });
+    await syncProfileFromContext(profile.id, body.content);
     res.json(context);
   } catch (error) {
     next(error);
