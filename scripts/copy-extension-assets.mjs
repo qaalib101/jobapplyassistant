@@ -31,3 +31,7 @@ await fs.copyFile(
   path.resolve("dist/apps/extension/src/ui/sidepanel.js"),
   path.join(target, "ui/sidepanel.js"),
 );
+await fs.copyFile(
+  path.resolve("node_modules/loaders.css/loaders.min.css"),
+  path.join(target, "ui/loaders.min.css"),
+);

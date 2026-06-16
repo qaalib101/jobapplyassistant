@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Job Apply Assistant</title>
+    <link rel="stylesheet" href="loaders.min.css" />
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
@@ -24,7 +25,12 @@
           </div>
         </header>
 
-        <section id="status" class="status">Open an application page and scan when ready.</section>
+        <section id="status" class="status">
+          <div id="statusSpinner" class="spinner-wrap" hidden>
+            <div class="ball-clip-rotate"><div></div></div>
+          </div>
+          <div id="statusText">Open an application page and scan when ready.</div>
+        </section>
 
         <section id="session" class="session" hidden>
           <div class="label">Session</div>
