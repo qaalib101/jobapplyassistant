@@ -1,5 +1,12 @@
 import { config } from "../config";
-import { AIProvider, DraftAnswerInput, DraftAnswerResult } from "../types";
+import {
+  AIProvider,
+  BatchAnswerInput,
+  BatchAnswerResult,
+  DraftAnswerInput,
+  DraftAnswerResult,
+} from "../types";
+import { extractJsonObject } from "./json";
 
 interface OpenAiCompatibleOptions {
   id: "deepseek" | "openai";
@@ -34,6 +41,23 @@ export class OpenAiCompatibleProvider implements AIProvider {
   }
 
   async generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult> {
+    const batch = await this.generateAnswerDrafts({
+      fields: [{ field: input.field, question: input.question }],
+      context: input.context,
+      jobDescription: input.jobDescription,
+    });
+    const first = batch[0];
+    if (!first) throw new Error(`${this.label} returned no draft text.`);
+    return {
+      text: first.text,
+      confidence: first.confidence,
+      sourceContext: first.sourceContext,
+      provider: first.provider,
+      model: first.model,
+    };
+  }
+
+  async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {
     if (!this.apiKey) {
       throw new Error(`${this.label} API key is not configured.`);
     }
@@ -54,17 +78,19 @@ export class OpenAiCompatibleProvider implements AIProvider {
             {
               role: "system",
               content:
-                "Draft concise job application answers from provided user context. Do not invent credentials. Return only the answer text.",
+                "Draft concise job application answers from provided user context. Do not invent credentials. Return valid JSON only.",
             },
             {
               role: "user",
               content: [
-                `Question: ${input.question}`,
-                `Field metadata: ${JSON.stringify(input.field)}`,
+                'Return exactly {"answers":[{"fieldId":"string","answer":"string","confidence":0.0,"sourceContext":{"contextUsed":"string","usedUploadedContext":true},"needsReview":true}]}',
+                `Fields/questions: ${JSON.stringify(input.fields)}`,
+                `Scanned job description/page text: ${input.jobDescription ?? "Not provided"}`,
                 `User context: ${input.context}`,
               ].join("\n\n"),
             },
           ],
+          response_format: { type: "json_object" },
           temperature: 0.3,
         }),
       });
@@ -76,19 +102,36 @@ export class OpenAiCompatibleProvider implements AIProvider {
       const payload = (await response.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
       };
-      const text = payload.choices?.[0]?.message?.content?.trim();
-      if (!text) throw new Error(`${this.label} returned no draft text.`);
+      const content = payload.choices?.[0]?.message?.content?.trim();
+      if (!content) throw new Error(`${this.label} returned no draft text.`);
 
-      return {
-        text,
-        confidence: 0.62,
-        sourceContext: {
-          contextUsed: "profile_resume_answer_bank",
+      const parsed = extractJsonObject<{
+        answers?: Array<{
+          fieldId?: string;
+          answer?: string;
+          confidence?: number;
+          sourceContext?: Record<string, unknown>;
+          needsReview?: boolean;
+        }>;
+      }>(content);
+      const validFieldIds = new Set(input.fields.map(({ field }) => field.fieldId));
+      return (parsed.answers ?? [])
+        .filter((answer) => answer.fieldId && validFieldIds.has(answer.fieldId) && answer.answer)
+        .map((answer) => ({
+          fieldId: answer.fieldId!,
+          text: answer.answer!,
+          confidence: Math.max(0, Math.min(1, answer.confidence ?? 0.62)),
+          sourceContext: {
+            ...(answer.sourceContext ?? {}),
+            needsReview: answer.needsReview ?? true,
+            contextUsed:
+              answer.sourceContext?.contextUsed ??
+              "batch_profile_resume_answer_bank_uploaded_context_job_description",
+            provider: this.id,
+          },
           provider: this.id,
-        },
-        provider: this.id,
-        model: this.model,
-      };
+          model: this.model,
+        }));
     } finally {
       clearTimeout(timeout);
     }

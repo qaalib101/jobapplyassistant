@@ -1,9 +1,24 @@
 import { config } from "../config";
-import { AIProvider, DraftAnswerInput, DraftAnswerResult } from "../types";
+import {
+  AIProvider,
+  BatchAnswerInput,
+  BatchAnswerResult,
+  DraftAnswerInput,
+  DraftAnswerResult,
+} from "../types";
 import { extractJsonObject } from "./json";
 
 interface DeepSeekPayload {
   answer?: string;
+  answers?: Array<{
+    fieldId?: string;
+    answer?: string;
+    confidence?: number;
+    sourceContext?: Record<string, unknown>;
+    usedContext?: string[];
+    needsReview?: boolean;
+    reasoningSummary?: string;
+  }>;
   tailoredResume?: string;
   confidence?: number;
   sourceContext?: Record<string, unknown>;
@@ -100,33 +115,62 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   async generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult> {
+    const batch = await this.generateAnswerDrafts({
+      fields: [{ field: input.field, question: input.question }],
+      context: input.context,
+      jobDescription: input.jobDescription,
+    });
+    const first = batch[0];
+    if (!first) throw new Error("DeepSeek did not return answer.");
+    return {
+      text: first.text,
+      confidence: first.confidence,
+      sourceContext: first.sourceContext,
+      provider: first.provider,
+      model: first.model,
+    };
+  }
+
+  async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {
     const payload = await this.jsonCompletion([
-      "Create a truthful draft answer for a job application field.",
+      "Create truthful draft answers for multiple job application fields in one response.",
       "Return JSON only with this exact shape:",
-      '{"answer":"string","confidence":0.0,"sourceContext":{"contextUsed":"string","usedUploadedContext":true}}',
+      '{"answers":[{"fieldId":"string","answer":"string","confidence":0.0,"sourceContext":{"contextUsed":"string","usedUploadedContext":true},"needsReview":true,"reasoningSummary":"string"}]}',
       "Rules:",
-      "- Do not invent employers, dates, credentials, degrees, metrics, or links.",
+      "- Return one answer object for each input fieldId.",
+      "- Do not invent employers, dates, credentials, degrees, metrics, links, legal status, or salary facts.",
       "- If context is insufficient, write a conservative answer and lower confidence.",
       "- Use first person.",
-      "- Keep the answer concise unless the field clearly asks for detail.",
+      "- Keep each answer concise unless the field clearly asks for detail.",
       "- The model must not output any fields outside the JSON shape.",
-      `Field metadata: ${JSON.stringify(input.field)}`,
-      `Question: ${input.question}`,
+      "- Use the job description to make answers relevant to this specific role.",
+      "- Prefer concrete details from uploaded context and resume over generic enthusiasm.",
+      "- Set needsReview=true for every answer.",
+      `Fields/questions: ${JSON.stringify(input.fields)}`,
+      `Scanned job description/page text: ${input.jobDescription ?? "Not provided"}`,
       `User identity/profile/resume/answer-bank/uploaded context: ${input.context}`,
     ].join("\n\n"));
 
-    if (!payload.answer) throw new Error("DeepSeek did not return answer.");
-    return {
-      text: payload.answer,
-      confidence: payload.confidence ?? 0.64,
-      sourceContext: {
-        ...(payload.sourceContext ?? {}),
-        contextUsed: payload.sourceContext?.contextUsed ?? "profile_resume_answer_bank_uploaded_context",
+    const validFieldIds = new Set(input.fields.map(({ field }) => field.fieldId));
+    const answers = payload.answers ?? [];
+    return answers
+      .filter((answer) => answer.fieldId && validFieldIds.has(answer.fieldId) && answer.answer)
+      .map((answer) => ({
+        fieldId: answer.fieldId!,
+        text: answer.answer!,
+        confidence: Math.max(0, Math.min(1, answer.confidence ?? 0.64)),
+        sourceContext: {
+          ...(answer.sourceContext ?? {}),
+          usedContext: answer.usedContext,
+          needsReview: answer.needsReview ?? true,
+          reasoningSummary: answer.reasoningSummary,
+          contextUsed:
+            answer.sourceContext?.contextUsed ?? "batch_profile_resume_answer_bank_uploaded_context_job_description",
+          provider: this.id,
+        },
         provider: this.id,
-      },
-      provider: this.id,
-      model: this.model,
-    };
+        model: this.model,
+      }));
   }
 
   async tailorResume(input: {

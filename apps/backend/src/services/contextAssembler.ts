@@ -46,21 +46,31 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
     0,
   );
 
-  const context = JSON.stringify({
-    profile: profile.rows[0] ?? null,
-    work: work.rows,
-    projects: projects.rows,
-    skills: skills.rows,
-    answers: answers.rows,
-    resumes: resumes.rows.map((row) => ({
-      ...row,
-      parsed_text: row.parsed_text?.slice(0, 4000),
-    })),
-    contextDocuments: contextDocuments.rows.map((row) => ({
-      ...row,
-      content: row.content?.slice(0, 8000),
-    })),
-  });
+  const context = [
+    "UPLOADED APPLICATION ASSISTANT CONTEXT",
+    contextDocuments.rows
+      .map((row) => [`Title: ${row.title}`, String(row.content ?? "").slice(0, 14000)].join("\n"))
+      .join("\n\n---\n\n") || "None",
+    "",
+    "STRUCTURED PROFILE DATA",
+    JSON.stringify({
+      profile: profile.rows[0] ?? null,
+      work: work.rows,
+      projects: projects.rows,
+      skills: skills.rows,
+    }),
+    "",
+    "SAVED ANSWER BANK",
+    JSON.stringify(answers.rows),
+    "",
+    "RESUME VERSIONS",
+    JSON.stringify(
+      resumes.rows.map((row) => ({
+        ...row,
+        parsed_text: row.parsed_text?.slice(0, 6000),
+      })),
+    ),
+  ].join("\n");
 
   return {
     text: context.slice(0, config.aiMaxContextChars),

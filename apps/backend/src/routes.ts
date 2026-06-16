@@ -460,6 +460,7 @@ router.post("/application-sessions/:id/suggestions", async (req, res, next) => {
       .object({
         pageSnapshotId: z.string(),
         fields: z.array(fieldSchema),
+        visibleText: z.string().max(100000).optional(),
       })
       .parse(req.body);
     const result = await createSuggestions({
@@ -467,6 +468,7 @@ router.post("/application-sessions/:id/suggestions", async (req, res, next) => {
       pageSnapshotId: body.pageSnapshotId,
       userProfileId: profile.id,
       fields: body.fields,
+      jobDescription: body.visibleText,
     });
     res.json(result);
   } catch (error) {

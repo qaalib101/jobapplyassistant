@@ -22,22 +22,30 @@ export async function createSuggestions(input: {
   pageSnapshotId: string;
   userProfileId: string;
   fields: FieldMetadata[];
+  jobDescription?: string;
 }) {
   const deterministic = await deterministicSuggestions(input.userProfileId, input.fields);
   const suggestions = [...deterministic];
   const provider = getProvider();
   const assembledContext = await assembleUserContext(input.userProfileId);
+  const fieldsNeedingAi = input.fields
+    .filter((field) => shouldGenerate(field, suggestions))
+    .map((field) => ({
+      field,
+      question: field.label || field.placeholder || field.name || "Application question",
+    }));
 
-  if (provider.id !== "none") {
-    for (const field of input.fields) {
-      if (!shouldGenerate(field, suggestions)) continue;
-
-      try {
-        const draft = await provider.generateAnswerDraft({
-          question: field.label || field.placeholder || field.name || "Application question",
-          field,
-          context: assembledContext.text,
-        });
+  if (provider.id !== "none" && fieldsNeedingAi.length > 0) {
+    try {
+      const drafts = await provider.generateAnswerDrafts({
+        fields: fieldsNeedingAi,
+        context: assembledContext.text,
+        jobDescription: input.jobDescription,
+      });
+      const fieldById = new Map(fieldsNeedingAi.map(({ field }) => [field.fieldId, field]));
+      for (const draft of drafts) {
+        const field = fieldById.get(draft.fieldId);
+        if (!field) continue;
         suggestions.push({
           fieldId: field.fieldId,
           fieldLabel: field.label,
@@ -53,33 +61,39 @@ export async function createSuggestions(input: {
           isGenerated: true,
           requiresUserReview: true,
         });
-      } catch (error) {
-        const fallback = getFallbackProvider();
-        if (fallback.id === provider.id || fallback.id === "none") continue;
-        const draft = await fallback.generateAnswerDraft({
-          question: field.label || field.placeholder || field.name || "Application question",
-          field,
+      }
+    } catch (error) {
+      const fallback = getFallbackProvider();
+      if (fallback.id !== provider.id && fallback.id !== "none") {
+        const drafts = await fallback.generateAnswerDrafts({
+          fields: fieldsNeedingAi,
           context: assembledContext.text,
+          jobDescription: input.jobDescription,
         });
-        suggestions.push({
-          fieldId: field.fieldId,
-          fieldLabel: field.label,
-          fieldType: field.type,
-          suggestedValue: draft.text,
-          confidence: draft.confidence,
-          sourceType: "GeneratedDraft",
-          sourceIds: [],
-          sourceContext: {
-            ...draft.sourceContext,
-            fallbackFrom: provider.id,
-            fallbackReason: error instanceof Error ? error.message : "unknown error",
-          },
-          provider: draft.provider,
-          model: draft.model,
-          promptVersion: "mvp-001",
-          isGenerated: true,
-          requiresUserReview: true,
-        });
+        const fieldById = new Map(fieldsNeedingAi.map(({ field }) => [field.fieldId, field]));
+        for (const draft of drafts) {
+          const field = fieldById.get(draft.fieldId);
+          if (!field) continue;
+          suggestions.push({
+            fieldId: field.fieldId,
+            fieldLabel: field.label,
+            fieldType: field.type,
+            suggestedValue: draft.text,
+            confidence: draft.confidence,
+            sourceType: "GeneratedDraft",
+            sourceIds: [],
+            sourceContext: {
+              ...draft.sourceContext,
+              fallbackFrom: provider.id,
+              fallbackReason: error instanceof Error ? error.message : "unknown error",
+            },
+            provider: draft.provider,
+            model: draft.model,
+            promptVersion: "mvp-001",
+            isGenerated: true,
+            requiresUserReview: true,
+          });
+        }
       }
     }
   }

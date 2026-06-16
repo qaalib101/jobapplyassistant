@@ -49,9 +49,30 @@ export interface DraftAnswerInput {
   question: string;
   field: FieldMetadata;
   context: string;
+  jobDescription?: string;
 }
 
 export interface DraftAnswerResult {
+  text: string;
+  confidence: number;
+  sourceContext: Record<string, unknown>;
+  provider: string;
+  model?: string;
+}
+
+export interface BatchAnswerField {
+  field: FieldMetadata;
+  question: string;
+}
+
+export interface BatchAnswerInput {
+  fields: BatchAnswerField[];
+  context: string;
+  jobDescription?: string;
+}
+
+export interface BatchAnswerResult {
+  fieldId: string;
   text: string;
   confidence: number;
   sourceContext: Record<string, unknown>;
@@ -66,6 +87,7 @@ export interface AIProvider {
   configured(): boolean;
   healthCheck(): Promise<boolean>;
   generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult>;
+  generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]>;
   tailorResume?(input: {
     resumeText: string;
     jobDescription: string;

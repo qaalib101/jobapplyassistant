@@ -450,6 +450,7 @@ async function scanPage() {
         body: JSON.stringify({
           pageSnapshotId,
           fields: scan.fields,
+          visibleText: scannedPageText,
         }),
       },
     );

@@ -12,7 +12,7 @@ export const config = {
   aiProvider: process.env.AI_PROVIDER ?? "deepseek",
   aiFallbackProvider: process.env.AI_FALLBACK_PROVIDER ?? "mock",
   aiTimeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 20000),
-  aiMaxContextChars: Number(process.env.AI_MAX_CONTEXT_CHARS ?? 12000),
+  aiMaxContextChars: Number(process.env.AI_MAX_CONTEXT_CHARS ?? 30000),
   deepseek: {
     apiKey: process.env.DEEPSEEK_API_KEY,
     baseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",

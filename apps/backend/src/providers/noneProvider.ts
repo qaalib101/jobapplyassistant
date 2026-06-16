@@ -17,6 +17,10 @@ export class NoneProvider implements AIProvider {
     throw new Error("AI generation is disabled.");
   }
 
+  async generateAnswerDrafts(): Promise<never> {
+    throw new Error("AI generation is disabled.");
+  }
+
   async tailorResume(): Promise<DraftAnswerResult> {
     throw new Error("AI generation is disabled.");
   }

@@ -23,6 +23,10 @@ export class UnavailableProvider implements AIProvider {
     throw new Error(this.reason);
   }
 
+  async generateAnswerDrafts(): Promise<never> {
+    throw new Error(this.reason);
+  }
+
   async tailorResume(): Promise<DraftAnswerResult> {
     throw new Error(this.reason);
   }
