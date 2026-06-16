@@ -37,6 +37,44 @@
       </section>
 
       <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Data Sources Preview</h2>
+            <p class="section-copy">Review what the assistant will use before scanning application pages.</p>
+          </div>
+          <button id="refreshSourcesButton" class="secondary-button" type="button">Refresh</button>
+        </div>
+
+        <div id="sourcesStatus" class="status">Loading data sources...</div>
+        <div class="source-grid">
+          <article class="source-card">
+            <h3>Profile</h3>
+            <dl id="profilePreview"></dl>
+          </article>
+
+          <article class="source-card">
+            <h3>Context</h3>
+            <dl id="contextPreview"></dl>
+          </article>
+
+          <article class="source-card">
+            <h3>Resumes</h3>
+            <div id="resumePreview" class="source-list"></div>
+          </article>
+
+          <article class="source-card">
+            <h3>Answer Bank</h3>
+            <div id="answerBankPreview" class="source-list"></div>
+          </article>
+
+          <article class="source-card">
+            <h3>AI Providers</h3>
+            <div id="providerPreview" class="source-list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2>Resume Workspace</h2>
         <p class="section-copy">Upload a text resume or construct one here. It will be available to the extension side panel.</p>
 
