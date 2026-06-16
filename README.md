@@ -70,21 +70,24 @@ cp .env.example .env
 
 The default local Postgres port is `5433` so it does not conflict with other projects using `5432`. The browser-facing local URL goes through Caddy at `http://jobapply.localhost:8080`.
 
-Start Postgres and Caddy:
+Start the local stack:
 
 ```bash
-docker compose up -d postgres caddy
+docker compose up -d
 ```
 
-Run migrations:
+This starts Postgres, the backend API, and Caddy. The backend container runs migrations on startup.
+
+To run migrations manually during local development:
 
 ```bash
 npm run db:migrate
 ```
 
-Start the backend:
+To run the backend outside Docker instead:
 
 ```bash
+docker compose up -d postgres caddy
 npm run dev:backend
 ```
 
@@ -94,7 +97,7 @@ The API and context UI run at:
 http://jobapply.localhost:8080
 ```
 
-The raw backend still listens on `http://localhost:4317`; Caddy proxies browser traffic to it.
+The raw backend is also exposed on `http://localhost:4317`; Caddy proxies browser traffic to the backend container.
 
 ## AI Context UI
 

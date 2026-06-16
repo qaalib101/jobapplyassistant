@@ -15,19 +15,40 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    image: node:22-alpine
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      PORT: 4317
+      DATABASE_URL: postgres://jobapply:jobapply_dev@postgres:5432/jobapplyassistant
+      PUBLIC_BASE_URL: http://jobapply.localhost:8080
+    command: >
+      sh -c "npm ci &&
+      npx prisma generate &&
+      npm run db:migrate &&
+      npx tsx apps/backend/src/server.ts"
+    ports:
+      - "4317:4317"
+    volumes:
+      - ./:/app
+      - backend_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   caddy:
     image: caddy:2
     ports:
       - "${CADDY_HTTP_PORT:-8080}:80"
     environment:
-      BACKEND_UPSTREAM: host.docker.internal:4317
+      BACKEND_UPSTREAM: backend:4317
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - backend
 
 volumes:
   jobapply_postgres:
+  backend_node_modules:
