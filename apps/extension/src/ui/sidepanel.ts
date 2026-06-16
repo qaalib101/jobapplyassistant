@@ -40,6 +40,14 @@ interface ApplicationSession {
   current_step?: string;
 }
 
+interface ContextSummary {
+  profilePresent: boolean;
+  answerCount: number;
+  resumeCount: number;
+  uploadedContextCount: number;
+  uploadedContextChars: number;
+}
+
 let activeTabId: number | undefined;
 let activeSession: ApplicationSession | undefined;
 let pageSnapshotId: string | undefined;
@@ -47,6 +55,7 @@ let suggestions: Suggestion[] = [];
 let detectedFields: FieldMetadata[] = [];
 let scannedPageText = "";
 let savedResumeVersionId: string | undefined;
+let contextSummary: ContextSummary | undefined;
 
 const scanButton = document.querySelector<HTMLButtonElement>("#scanButton");
 const fillButton = document.querySelector<HTMLButtonElement>("#fillButton");
@@ -161,9 +170,13 @@ function lockedTabId() {
 function renderSession(session: ApplicationSession) {
   if (!sessionElement || !sessionText) return;
   sessionElement.hidden = false;
-  sessionText.textContent = [session.company, session.role, session.ats_domain]
+  const sessionLabel = [session.company, session.role, session.ats_domain]
     .filter(Boolean)
     .join(" · ") || session.current_step || session.id;
+  const contextLabel = contextSummary
+    ? `Context: ${contextSummary.uploadedContextCount} uploaded docs, ${contextSummary.resumeCount} resumes, ${contextSummary.answerCount} saved answers`
+    : "Context: not loaded yet";
+  sessionText.textContent = `${sessionLabel}\n${contextLabel}`;
 }
 
 function renderSuggestions() {
@@ -200,9 +213,15 @@ function renderSuggestions() {
     const source = document.createElement("div");
     source.className = "source";
     const confidence = Math.round(suggestion.confidence * 100);
-    source.textContent = `${suggestion.sourceType} · ${confidence}% confidence${
-      suggestion.isGenerated ? " · generated draft" : ""
-    }`;
+    const sourceParts = [
+      suggestion.sourceType,
+      `${confidence}% confidence`,
+      suggestion.provider ? `provider: ${suggestion.provider}` : "",
+      suggestion.model ? `model: ${suggestion.model}` : "",
+      suggestion.isGenerated ? "generated draft" : "",
+      suggestion.sourceContext?.contextUsed ? `context: ${suggestion.sourceContext.contextUsed}` : "",
+    ].filter(Boolean);
+    source.textContent = sourceParts.join(" · ");
 
     body.append(title, value, source);
     if (suggestion.isGenerated) {
@@ -397,7 +416,7 @@ async function scanPage() {
     );
     pageSnapshotId = snapshot.id;
 
-    const response = await api<{ suggestions: Suggestion[] }>(
+    const response = await api<{ suggestions: Suggestion[]; contextSummary?: ContextSummary }>(
       `/application-sessions/${activeSession.id}/suggestions`,
       {
         method: "POST",
@@ -408,6 +427,8 @@ async function scanPage() {
       },
     );
     suggestions = response.suggestions;
+    contextSummary = response.contextSummary;
+    renderSession(activeSession);
     renderSuggestions();
     setStatus(
       suggestions.length

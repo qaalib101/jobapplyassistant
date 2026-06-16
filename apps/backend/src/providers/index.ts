@@ -1,18 +1,19 @@
 import { config } from "../config";
 import { AIProvider } from "../types";
+import { DeepSeekProvider } from "./deepSeekProvider";
 import { MockProvider } from "./mockProvider";
 import { NoneProvider } from "./noneProvider";
 import { OllamaProvider } from "./ollamaProvider";
 import { OpenAiCompatibleProvider } from "./openAiCompatibleProvider";
+import { UnavailableProvider } from "./unavailableProvider";
 
 const providers: Record<string, AIProvider> = {
-  deepseek: new OpenAiCompatibleProvider({
-    id: "deepseek",
-    label: "DeepSeek",
-    baseUrl: config.deepseek.baseUrl,
-    apiKey: config.deepseek.apiKey,
-    model: config.deepseek.model,
-  }),
+  deepseek: config.deepseek.apiKey
+    ? new DeepSeekProvider()
+    : new UnavailableProvider(
+        "deepseek",
+        "DEEPSEEK_API_KEY is missing. Set it or use AI_PROVIDER=mock.",
+      ),
   openai: new OpenAiCompatibleProvider({
     id: "openai",
     label: "OpenAI",

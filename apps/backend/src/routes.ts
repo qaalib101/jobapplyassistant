@@ -462,13 +462,13 @@ router.post("/application-sessions/:id/suggestions", async (req, res, next) => {
         fields: z.array(fieldSchema),
       })
       .parse(req.body);
-    const suggestions = await createSuggestions({
+    const result = await createSuggestions({
       applicationSessionId: req.params.id,
       pageSnapshotId: body.pageSnapshotId,
       userProfileId: profile.id,
       fields: body.fields,
     });
-    res.json({ suggestions });
+    res.json(result);
   } catch (error) {
     next(error);
   }

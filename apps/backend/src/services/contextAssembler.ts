@@ -1,7 +1,18 @@
 import { pool } from "../db/pool";
 import { config } from "../config";
 
-export async function assembleUserContext(userProfileId: string): Promise<string> {
+export interface AssembledUserContext {
+  text: string;
+  summary: {
+    profilePresent: boolean;
+    answerCount: number;
+    resumeCount: number;
+    uploadedContextCount: number;
+    uploadedContextChars: number;
+  };
+}
+
+export async function assembleUserContext(userProfileId: string): Promise<AssembledUserContext> {
   const [profile, work, projects, skills, answers, resumes, contextDocuments] = await Promise.all([
     pool.query("SELECT * FROM user_profiles WHERE id = $1", [userProfileId]),
     pool.query(
@@ -30,6 +41,11 @@ export async function assembleUserContext(userProfileId: string): Promise<string
     ),
   ]);
 
+  const uploadedContextChars = contextDocuments.rows.reduce(
+    (total, row) => total + String(row.content ?? "").length,
+    0,
+  );
+
   const context = JSON.stringify({
     profile: profile.rows[0] ?? null,
     work: work.rows,
@@ -46,5 +62,14 @@ export async function assembleUserContext(userProfileId: string): Promise<string
     })),
   });
 
-  return context.slice(0, config.aiMaxContextChars);
+  return {
+    text: context.slice(0, config.aiMaxContextChars),
+    summary: {
+      profilePresent: Boolean(profile.rows[0]),
+      answerCount: answers.rows.length,
+      resumeCount: resumes.rows.length,
+      uploadedContextCount: contextDocuments.rows.length,
+      uploadedContextChars,
+    },
+  };
 }

@@ -11,6 +11,7 @@ function shouldGenerate(field: FieldMetadata, existing: Suggestion[]) {
   if (/\b(gender|race|ethnicity|disability|veteran|birth|ssn|social security)\b/i.test(label)) {
     return false;
   }
+  if (field.type === "textarea") return true;
   return /\b(why|describe|tell us|cover letter|additional|summary|experience|interest)\b/i.test(
     label,
   );
@@ -25,9 +26,9 @@ export async function createSuggestions(input: {
   const deterministic = await deterministicSuggestions(input.userProfileId, input.fields);
   const suggestions = [...deterministic];
   const provider = getProvider();
+  const assembledContext = await assembleUserContext(input.userProfileId);
 
   if (provider.id !== "none") {
-    const context = await assembleUserContext(input.userProfileId);
     for (const field of input.fields) {
       if (!shouldGenerate(field, suggestions)) continue;
 
@@ -35,7 +36,7 @@ export async function createSuggestions(input: {
         const draft = await provider.generateAnswerDraft({
           question: field.label || field.placeholder || field.name || "Application question",
           field,
-          context,
+          context: assembledContext.text,
         });
         suggestions.push({
           fieldId: field.fieldId,
@@ -58,7 +59,7 @@ export async function createSuggestions(input: {
         const draft = await fallback.generateAnswerDraft({
           question: field.label || field.placeholder || field.name || "Application question",
           field,
-          context,
+          context: assembledContext.text,
         });
         suggestions.push({
           fieldId: field.fieldId,
@@ -124,5 +125,8 @@ export async function createSuggestions(input: {
     );
   }
 
-  return suggestions;
+  return {
+    suggestions,
+    contextSummary: assembledContext.summary,
+  };
 }
