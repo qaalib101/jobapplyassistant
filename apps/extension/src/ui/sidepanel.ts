@@ -106,7 +106,11 @@ async function activeTab() {
 }
 
 function hostPatternForUrl(tabUrl?: string) {
-  if (!tabUrl) throw new Error("This tab does not expose a URL the extension can access.");
+  if (!tabUrl) {
+    throw new Error(
+      "Chrome did not expose this tab URL. Reload the extension after rebuilding, then open the job page tab and click the extension icon from that tab.",
+    );
+  }
   const url = new URL(tabUrl);
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error("The extension can only scan http and https pages.");
