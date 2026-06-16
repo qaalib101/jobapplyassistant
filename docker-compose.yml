@@ -27,6 +27,7 @@ services:
     command: >
       sh -c "npm ci &&
       npx prisma generate &&
+      npm run build:frontend &&
       npm run db:migrate &&
       npx tsx apps/backend/src/server.ts"
     ports:

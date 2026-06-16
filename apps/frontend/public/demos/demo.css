@@ -15,6 +15,10 @@ main {
 }
 
 header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
   margin-bottom: 18px;
 }
 
@@ -26,6 +30,34 @@ h1 {
 p {
   margin: 0;
   color: #526273;
+}
+
+nav {
+  display: flex;
+  gap: 14px;
+}
+
+a {
+  color: #175cd3;
+  text-decoration: none;
+}
+
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.demo-card {
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: white;
+  padding: 16px;
+}
+
+.demo-card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
 }
 
 form {
@@ -117,6 +149,10 @@ a.button {
 }
 
 @media (max-width: 680px) {
+  header {
+    flex-direction: column;
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }

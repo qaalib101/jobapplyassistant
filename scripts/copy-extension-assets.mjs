@@ -5,11 +5,6 @@ const source = path.resolve("apps/extension/public");
 const target = path.resolve("dist/apps/extension");
 
 await fs.cp(source, target, { recursive: true });
-await fs.cp(
-  path.resolve("apps/backend/public"),
-  path.resolve("dist/apps/backend/public"),
-  { recursive: true },
-);
 
 await fs.mkdir(path.join(target, "background"), { recursive: true });
 await fs.mkdir(path.join(target, "content"), { recursive: true });

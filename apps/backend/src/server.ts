@@ -36,7 +36,15 @@ app.use(
 );
 
 app.use("/api", router);
-app.use(express.static(path.resolve(process.cwd(), "apps/backend/public")));
+
+const frontendDist = path.resolve(process.cwd(), "dist/apps/frontend");
+const frontendSource = path.resolve(process.cwd(), "apps/frontend/public");
+
+app.use(express.static(frontendDist));
+app.use(express.static(frontendSource));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(frontendDist, "index.html"));
+});
 
 app.use(
   (

@@ -11,6 +11,6 @@
     "rootDir": ".",
     "resolveJsonModule": true
   },
-  "include": ["apps/**/*.ts"],
+  "include": ["apps/backend/**/*.ts", "apps/extension/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

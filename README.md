@@ -45,8 +45,10 @@ This project intentionally does not:
 apps/
   backend/
     db/migrations/        Postgres schema migrations
-    public/               Lightweight context UI
     src/                  API, providers, services
+  frontend/
+    public/               Static demo application forms
+    src/                  React companion UI
   extension/
     public/               MV3 manifest and side panel HTML/CSS
     src/                  background, content scripts, side panel controller
@@ -76,7 +78,7 @@ Start the local stack:
 docker compose up -d
 ```
 
-This starts Postgres, the backend API, and Caddy. The backend container runs migrations on startup.
+This starts Postgres, the backend API, the React frontend build, and Caddy. The backend container builds the frontend and runs migrations on startup.
 
 To run migrations manually during local development:
 
@@ -88,8 +90,17 @@ To run the backend outside Docker instead:
 
 ```bash
 docker compose up -d postgres caddy
+npm run build:frontend
 npm run dev:backend
 ```
+
+For frontend-only development with Vite:
+
+```bash
+npm run dev:frontend
+```
+
+The Vite dev server runs on `http://localhost:4318` and proxies `/api` to the backend on `http://localhost:4317`.
 
 The API and context UI run at:
 
@@ -99,7 +110,7 @@ http://jobapply.localhost:8080
 
 The raw backend is also exposed on `http://localhost:4317`; Caddy proxies browser traffic to the backend container.
 
-## AI Context UI
+## Companion UI
 
 Open:
 
@@ -107,7 +118,9 @@ Open:
 http://jobapply.localhost:8080/
 ```
 
-Paste a broad context document with details the AI should use, such as:
+The companion UI is a lightweight React SPA built with Vite and Tailwind CSS. Use it to review data sources, paste a broad context document, and save resume text.
+
+The context document can include:
 
 - resume text
 - career summary
@@ -118,7 +131,7 @@ Paste a broad context document with details the AI should use, such as:
 - achievements
 - reusable application answers
 
-This is stored locally in Postgres and included when the backend drafts answers for uncommon application questions.
+This is stored locally in Postgres, syncs basic profile fields, and is included when the backend drafts answers for uncommon application questions.
 
 ## Demo Forms
 
@@ -193,6 +206,12 @@ The extension build is written to:
 
 ```text
 dist/apps/extension
+```
+
+The companion frontend build is written to:
+
+```text
+dist/apps/frontend
 ```
 
 ## Load The Extension Locally
