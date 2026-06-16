@@ -1,4 +1,5 @@
-import { pool } from "../db/pool";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../db/prisma";
 import { getFallbackProvider, getProvider } from "../providers";
 import { FieldMetadata, Suggestion } from "../types";
 import { assembleUserContext } from "./contextAssembler";
@@ -99,44 +100,25 @@ export async function createSuggestions(input: {
   }
 
   for (const suggestion of suggestions) {
-    await pool.query(
-      `
-        INSERT INTO field_suggestions (
-          application_session_id,
-          page_snapshot_id,
-          field_id,
-          field_label,
-          field_type,
-          suggested_value,
-          confidence,
-          source_type,
-          source_ids,
-          source_context,
-          provider,
-          model,
-          prompt_version,
-          is_generated,
-          requires_user_review
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
-      `,
-      [
-        input.applicationSessionId,
-        input.pageSnapshotId,
-        suggestion.fieldId,
-        suggestion.fieldLabel ?? null,
-        suggestion.fieldType,
-        suggestion.suggestedValue,
-        suggestion.confidence,
-        suggestion.sourceType,
-        JSON.stringify(suggestion.sourceIds),
-        JSON.stringify(suggestion.sourceContext),
-        suggestion.provider ?? null,
-        suggestion.model ?? null,
-        suggestion.promptVersion ?? null,
-        suggestion.isGenerated,
-      ],
-    );
+    await prisma.fieldSuggestion.create({
+      data: {
+        application_session_id: input.applicationSessionId,
+        page_snapshot_id: input.pageSnapshotId,
+        field_id: suggestion.fieldId,
+        field_label: suggestion.fieldLabel ?? null,
+        field_type: suggestion.fieldType,
+        suggested_value: suggestion.suggestedValue,
+        confidence: suggestion.confidence,
+        source_type: suggestion.sourceType,
+        source_ids: suggestion.sourceIds,
+        source_context: suggestion.sourceContext as Prisma.InputJsonValue,
+        provider: suggestion.provider ?? null,
+        model: suggestion.model ?? null,
+        prompt_version: suggestion.promptVersion ?? null,
+        is_generated: suggestion.isGenerated,
+        requires_user_review: true,
+      },
+    });
   }
 
   return {

@@ -1,4 +1,4 @@
-import { pool } from "../db/pool";
+import { prisma } from "../db/prisma";
 import { FieldMetadata, Suggestion } from "../types";
 import { normalizeText } from "../utils/text";
 
@@ -107,15 +107,20 @@ export async function deterministicSuggestions(
   userProfileId: string,
   fields: FieldMetadata[],
 ): Promise<Suggestion[]> {
-  const profileResult = await pool.query("SELECT * FROM user_profiles WHERE id = $1", [
-    userProfileId,
-  ]);
-  const profile = profileResult.rows[0] ?? {};
+  const profile = ((await prisma.userProfile.findUnique({
+    where: { id: userProfileId },
+  })) ?? {}) as Record<string, unknown>;
 
-  const answerResult = await pool.query(
-    "SELECT id, question_key, question_text, answer_text, tags FROM answer_bank_items WHERE user_profile_id = $1",
-    [userProfileId],
-  );
+  const answerRows = await prisma.answerBankItem.findMany({
+    where: { user_profile_id: userProfileId },
+    select: {
+      id: true,
+      question_key: true,
+      question_text: true,
+      answer_text: true,
+      tags: true,
+    },
+  });
 
   const suggestions: Suggestion[] = [];
 
@@ -176,7 +181,7 @@ export async function deterministicSuggestions(
       }
     }
 
-    const answerMatch = answerResult.rows
+    const answerMatch = answerRows
       .map((answer) => ({ answer, score: answerScore(text, answer) }))
       .filter((item) => item.score >= 0.35)
       .sort((left, right) => right.score - left.score)[0]?.answer;

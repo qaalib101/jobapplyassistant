@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UserProfile {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name            String?
+  email                String?
+  phone                String?
+  location             String?
+  linkedin_url         String?
+  github_url           String?
+  portfolio_url        String?
+  work_authorization   String?
+  sponsorship_required Boolean?
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @default(now()) @db.Timestamptz(6)
+
+  answer_bank_items      AnswerBankItem[]
+  application_sessions   ApplicationSession[]
+  project_experiences    ProjectExperience[]
+  resume_versions        ResumeVersion[]
+  skills                 Skill[]
+  user_context_documents UserContextDocument[]
+  work_experiences       WorkExperience[]
+
+  @@map("user_profiles")
+}
+
+model WorkExperience {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_profile_id String   @db.Uuid
+  company         String
+  title           String
+  location        String?
+  start_date      DateTime? @db.Date
+  end_date        DateTime? @db.Date
+  is_current      Boolean  @default(false)
+  description     String?
+  achievements    Json     @default("[]")
+  skills_used     Json     @default("[]")
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  user_profile UserProfile @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+
+  @@map("work_experiences")
+}
+
+model ProjectExperience {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_profile_id String   @db.Uuid
+  name            String
+  description     String?
+  url             String?
+  repo_url        String?
+  technologies    Json     @default("[]")
+  highlights      Json     @default("[]")
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  user_profile UserProfile @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+
+  @@map("project_experiences")
+}
+
+model Skill {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_profile_id  String   @db.Uuid
+  name             String
+  category         String?
+  proficiency      String?
+  years_experience Decimal? @db.Decimal
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  user_profile UserProfile @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+
+  @@map("skills")
+}
+
+model ResumeVersion {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_profile_id String   @db.Uuid
+  label           String
+  file_name       String?
+  file_path       String?
+  parsed_text     String?
+  target_role     String?
+  metadata        Json     @default("{}")
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  user_profile         UserProfile          @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+  application_sessions ApplicationSession[]
+
+  @@map("resume_versions")
+}
+
+model AnswerBankItem {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_profile_id String    @db.Uuid
+  question_key    String?
+  question_text   String
+  answer_text     String
+  tags            Json      @default("[]")
+  source_type     String?
+  source_ids      Json      @default("[]")
+  usage_count     Int       @default(0)
+  last_used_at    DateTime? @db.Timestamptz(6)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @default(now()) @db.Timestamptz(6)
+
+  user_profile UserProfile @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+
+  @@map("answer_bank_items")
+}
+
+model ApplicationSession {
+  id                         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_profile_id            String    @db.Uuid
+  job_url                    String
+  canonical_job_url          String
+  company                    String?
+  role                       String?
+  ats_domain                 String?
+  ats_type                   String?
+  status                     String    @default("active")
+  current_step               String?
+  completed_steps            Json      @default("[]")
+  selected_resume_version_id String?   @db.Uuid
+  started_at                 DateTime  @default(now()) @db.Timestamptz(6)
+  last_seen_at               DateTime  @default(now()) @db.Timestamptz(6)
+  completed_at               DateTime? @db.Timestamptz(6)
+  metadata                   Json      @default("{}")
+
+  selected_resume_version ResumeVersion?             @relation(fields: [selected_resume_version_id], references: [id])
+  user_profile            UserProfile                @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+  page_snapshots          ApplicationPageSnapshot[]
+  field_suggestions       FieldSuggestion[]
+  filled_field_logs       FilledFieldLog[]
+
+  @@index([user_profile_id, status], map: "application_sessions_user_status_idx")
+  @@index([ats_domain], map: "application_sessions_domain_idx")
+  @@index([canonical_job_url], map: "application_sessions_canonical_url_idx")
+  @@map("application_sessions")
+}
+
+model ApplicationPageSnapshot {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  application_session_id String   @db.Uuid
+  page_url               String
+  page_title             String?
+  step_label             String?
+  field_snapshot         Json     @default("{}")
+  visible_text_hash      String?
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  application_session ApplicationSession @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
+  field_suggestions   FieldSuggestion[]
+  filled_field_logs   FilledFieldLog[]
+
+  @@index([application_session_id, created_at(sort: Desc)], map: "page_snapshots_session_idx")
+  @@map("application_page_snapshots")
+}
+
+model FieldSuggestion {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  application_session_id String   @db.Uuid
+  page_snapshot_id       String   @db.Uuid
+  field_id               String
+  field_label            String?
+  field_type             String?
+  suggested_value        String?
+  confidence             Decimal  @default(0) @db.Decimal
+  source_type            String?
+  source_ids             Json     @default("[]")
+  source_context         Json     @default("{}")
+  provider               String?
+  model                  String?
+  prompt_version         String?
+  is_generated           Boolean  @default(false)
+  requires_user_review   Boolean  @default(true)
+  accepted               Boolean?
+  rejected               Boolean?
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  application_session ApplicationSession     @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
+  page_snapshot       ApplicationPageSnapshot @relation(fields: [page_snapshot_id], references: [id], onDelete: Cascade)
+  filled_field_logs   FilledFieldLog[]
+
+  @@index([page_snapshot_id], map: "field_suggestions_snapshot_idx")
+  @@map("field_suggestions")
+}
+
+model FilledFieldLog {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  application_session_id String   @db.Uuid
+  page_snapshot_id       String   @db.Uuid
+  field_suggestion_id    String?  @db.Uuid
+  field_id               String
+  field_label            String?
+  filled_value           String?
+  filled_value_redacted  String?
+  value_hash             String?
+  fill_method            String   @default("user_selected")
+  user_confirmed         Boolean  @default(true)
+  filled_at              DateTime @default(now()) @db.Timestamptz(6)
+
+  application_session ApplicationSession      @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
+  field_suggestion    FieldSuggestion?        @relation(fields: [field_suggestion_id], references: [id], onDelete: SetNull)
+  page_snapshot       ApplicationPageSnapshot @relation(fields: [page_snapshot_id], references: [id], onDelete: Cascade)
+
+  @@map("filled_field_logs")
+}
+
+model AIRequestLog {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  application_session_id String?  @db.Uuid
+  provider               String
+  model                  String?
+  purpose                String
+  input_summary          Json     @default("{}")
+  output_summary         Json     @default("{}")
+  success                Boolean
+  error_message          String?
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("ai_request_logs")
+}
+
+model UserContextDocument {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_profile_id String   @db.Uuid
+  title           String   @default("General AI context")
+  content         String
+  source_type     String   @default("manual_text")
+  tags            Json     @default("[]")
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  user_profile UserProfile @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+
+  @@index([user_profile_id, is_active, updated_at(sort: Desc)], map: "user_context_documents_profile_active_idx")
+  @@map("user_context_documents")
+}

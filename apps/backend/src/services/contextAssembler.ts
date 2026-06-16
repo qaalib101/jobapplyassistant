@@ -1,4 +1,4 @@
-import { pool } from "../db/pool";
+import { prisma } from "../db/prisma";
 import { config } from "../config";
 
 export interface AssembledUserContext {
@@ -14,58 +14,65 @@ export interface AssembledUserContext {
 
 export async function assembleUserContext(userProfileId: string): Promise<AssembledUserContext> {
   const [profile, work, projects, skills, answers, resumes, contextDocuments] = await Promise.all([
-    pool.query("SELECT * FROM user_profiles WHERE id = $1", [userProfileId]),
-    pool.query(
-      "SELECT company, title, description, achievements, skills_used FROM work_experiences WHERE user_profile_id = $1 ORDER BY is_current DESC, end_date DESC NULLS FIRST",
-      [userProfileId],
-    ),
-    pool.query(
-      "SELECT name, description, technologies, highlights FROM project_experiences WHERE user_profile_id = $1",
-      [userProfileId],
-    ),
-    pool.query(
-      "SELECT name, category, proficiency, years_experience FROM skills WHERE user_profile_id = $1",
-      [userProfileId],
-    ),
-    pool.query(
-      "SELECT question_text, answer_text, tags FROM answer_bank_items WHERE user_profile_id = $1 ORDER BY usage_count DESC, updated_at DESC LIMIT 20",
-      [userProfileId],
-    ),
-    pool.query(
-      "SELECT label, target_role, parsed_text FROM resume_versions WHERE user_profile_id = $1 ORDER BY updated_at DESC LIMIT 3",
-      [userProfileId],
-    ),
-    pool.query(
-      "SELECT title, content, source_type, tags, updated_at FROM user_context_documents WHERE user_profile_id = $1 AND is_active = true ORDER BY updated_at DESC LIMIT 5",
-      [userProfileId],
-    ),
+    prisma.userProfile.findUnique({ where: { id: userProfileId } }),
+    prisma.workExperience.findMany({
+      where: { user_profile_id: userProfileId },
+      select: { company: true, title: true, description: true, achievements: true, skills_used: true },
+      orderBy: [{ is_current: "desc" }, { end_date: { sort: "desc", nulls: "first" } }],
+    }),
+    prisma.projectExperience.findMany({
+      where: { user_profile_id: userProfileId },
+      select: { name: true, description: true, technologies: true, highlights: true },
+    }),
+    prisma.skill.findMany({
+      where: { user_profile_id: userProfileId },
+      select: { name: true, category: true, proficiency: true, years_experience: true },
+    }),
+    prisma.answerBankItem.findMany({
+      where: { user_profile_id: userProfileId },
+      select: { question_text: true, answer_text: true, tags: true },
+      orderBy: [{ usage_count: "desc" }, { updated_at: "desc" }],
+      take: 20,
+    }),
+    prisma.resumeVersion.findMany({
+      where: { user_profile_id: userProfileId },
+      select: { label: true, target_role: true, parsed_text: true },
+      orderBy: { updated_at: "desc" },
+      take: 3,
+    }),
+    prisma.userContextDocument.findMany({
+      where: { user_profile_id: userProfileId, is_active: true },
+      select: { title: true, content: true, source_type: true, tags: true, updated_at: true },
+      orderBy: { updated_at: "desc" },
+      take: 5,
+    }),
   ]);
 
-  const uploadedContextChars = contextDocuments.rows.reduce(
+  const uploadedContextChars = contextDocuments.reduce(
     (total, row) => total + String(row.content ?? "").length,
     0,
   );
 
   const context = [
     "UPLOADED APPLICATION ASSISTANT CONTEXT",
-    contextDocuments.rows
+    contextDocuments
       .map((row) => [`Title: ${row.title}`, String(row.content ?? "").slice(0, 14000)].join("\n"))
       .join("\n\n---\n\n") || "None",
     "",
     "STRUCTURED PROFILE DATA",
     JSON.stringify({
-      profile: profile.rows[0] ?? null,
-      work: work.rows,
-      projects: projects.rows,
-      skills: skills.rows,
+      profile,
+      work,
+      projects,
+      skills,
     }),
     "",
     "SAVED ANSWER BANK",
-    JSON.stringify(answers.rows),
+    JSON.stringify(answers),
     "",
     "RESUME VERSIONS",
     JSON.stringify(
-      resumes.rows.map((row) => ({
+      resumes.map((row) => ({
         ...row,
         parsed_text: row.parsed_text?.slice(0, 6000),
       })),
@@ -75,10 +82,10 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
   return {
     text: context.slice(0, config.aiMaxContextChars),
     summary: {
-      profilePresent: Boolean(profile.rows[0]),
-      answerCount: answers.rows.length,
-      resumeCount: resumes.rows.length,
-      uploadedContextCount: contextDocuments.rows.length,
+      profilePresent: Boolean(profile),
+      answerCount: answers.length,
+      resumeCount: resumes.length,
+      uploadedContextCount: contextDocuments.length,
       uploadedContextChars,
     },
   };

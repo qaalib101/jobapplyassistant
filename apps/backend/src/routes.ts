@@ -1,6 +1,7 @@
 import express from "express";
 import { z } from "zod";
-import { pool } from "./db/pool";
+import { Prisma } from "@prisma/client";
+import { prisma } from "./db/prisma";
 import { config } from "./config";
 import { listProviders, getProvider } from "./providers";
 import { createSuggestions } from "./services/suggestionService";
@@ -34,13 +35,12 @@ const fieldSchema = z.object({
 });
 
 async function getOrCreateDefaultProfile() {
-  const existing = await pool.query("SELECT * FROM user_profiles ORDER BY created_at ASC LIMIT 1");
-  if (existing.rows[0]) return existing.rows[0];
+  const existing = await prisma.userProfile.findFirst({
+    orderBy: { created_at: "asc" },
+  });
+  if (existing) return existing;
 
-  const created = await pool.query(
-    "INSERT INTO user_profiles DEFAULT VALUES RETURNING *",
-  );
-  return created.rows[0];
+  return prisma.userProfile.create({ data: {} });
 }
 
 router.get("/health", (_req, res) => {
@@ -72,36 +72,24 @@ router.put("/profile", async (req, res, next) => {
       })
       .parse(req.body);
 
-    const updated = await pool.query(
-      `
-        UPDATE user_profiles
-        SET full_name = COALESCE($2, full_name),
-            email = COALESCE($3, email),
-            phone = COALESCE($4, phone),
-            location = COALESCE($5, location),
-            linkedin_url = COALESCE($6, linkedin_url),
-            github_url = COALESCE($7, github_url),
-            portfolio_url = COALESCE($8, portfolio_url),
-            work_authorization = COALESCE($9, work_authorization),
-            sponsorship_required = COALESCE($10, sponsorship_required),
-            updated_at = now()
-        WHERE id = $1
-        RETURNING *
-      `,
-      [
-        profile.id,
-        body.fullName,
-        body.email,
-        body.phone,
-        body.location,
-        body.linkedinUrl,
-        body.githubUrl,
-        body.portfolioUrl,
-        body.workAuthorization,
-        body.sponsorshipRequired,
-      ],
-    );
-    res.json(updated.rows[0]);
+    const data = {
+      ...(body.fullName != null ? { full_name: body.fullName } : {}),
+      ...(body.email != null ? { email: body.email } : {}),
+      ...(body.phone != null ? { phone: body.phone } : {}),
+      ...(body.location != null ? { location: body.location } : {}),
+      ...(body.linkedinUrl != null ? { linkedin_url: body.linkedinUrl } : {}),
+      ...(body.githubUrl != null ? { github_url: body.githubUrl } : {}),
+      ...(body.portfolioUrl != null ? { portfolio_url: body.portfolioUrl } : {}),
+      ...(body.workAuthorization != null ? { work_authorization: body.workAuthorization } : {}),
+      ...(body.sponsorshipRequired != null ? { sponsorship_required: body.sponsorshipRequired } : {}),
+      updated_at: new Date(),
+    };
+
+    const updated = await prisma.userProfile.update({
+      where: { id: profile.id },
+      data,
+    });
+    res.json(updated);
   } catch (error) {
     next(error);
   }
@@ -110,11 +98,11 @@ router.put("/profile", async (req, res, next) => {
 router.get("/answer-bank", async (_req, res, next) => {
   try {
     const profile = await getOrCreateDefaultProfile();
-    const result = await pool.query(
-      "SELECT * FROM answer_bank_items WHERE user_profile_id = $1 ORDER BY updated_at DESC",
-      [profile.id],
-    );
-    res.json(result.rows);
+    const items = await prisma.answerBankItem.findMany({
+      where: { user_profile_id: profile.id },
+      orderBy: { updated_at: "desc" },
+    });
+    res.json(items);
   } catch (error) {
     next(error);
   }
@@ -131,17 +119,16 @@ router.post("/answer-bank", async (req, res, next) => {
         tags: z.array(z.string()).default([]),
       })
       .parse(req.body);
-    const result = await pool.query(
-      `
-        INSERT INTO answer_bank_items (
-          user_profile_id, question_key, question_text, answer_text, tags
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-      `,
-      [profile.id, body.questionKey ?? null, body.questionText, body.answerText, JSON.stringify(body.tags)],
-    );
-    res.status(201).json(result.rows[0]);
+    const item = await prisma.answerBankItem.create({
+      data: {
+        user_profile_id: profile.id,
+        question_key: body.questionKey ?? null,
+        question_text: body.questionText,
+        answer_text: body.answerText,
+        tags: body.tags,
+      },
+    });
+    res.status(201).json(item);
   } catch (error) {
     next(error);
   }
@@ -150,18 +137,12 @@ router.post("/answer-bank", async (req, res, next) => {
 router.get("/context", async (_req, res, next) => {
   try {
     const profile = await getOrCreateDefaultProfile();
-    const result = await pool.query(
-      `
-        SELECT *
-        FROM user_context_documents
-        WHERE user_profile_id = $1 AND is_active = true
-        ORDER BY updated_at DESC
-        LIMIT 1
-      `,
-      [profile.id],
-    );
+    const context = await prisma.userContextDocument.findFirst({
+      where: { user_profile_id: profile.id, is_active: true },
+      orderBy: { updated_at: "desc" },
+    });
     res.json(
-      result.rows[0] ?? {
+      context ?? {
         title: "General AI context",
         content: "",
         tags: [],
@@ -184,22 +165,22 @@ router.put("/context", async (req, res, next) => {
       })
       .parse(req.body);
 
-    await pool.query(
-      "UPDATE user_context_documents SET is_active = false, updated_at = now() WHERE user_profile_id = $1",
-      [profile.id],
-    );
+    await prisma.userContextDocument.updateMany({
+      where: { user_profile_id: profile.id },
+      data: { is_active: false, updated_at: new Date() },
+    });
 
-    const result = await pool.query(
-      `
-        INSERT INTO user_context_documents (
-          user_profile_id, title, content, tags, source_type, is_active
-        )
-        VALUES ($1, $2, $3, $4, 'manual_text', true)
-        RETURNING *
-      `,
-      [profile.id, body.title, body.content, JSON.stringify(body.tags)],
-    );
-    res.json(result.rows[0]);
+    const context = await prisma.userContextDocument.create({
+      data: {
+        user_profile_id: profile.id,
+        title: body.title,
+        content: body.content,
+        tags: body.tags,
+        source_type: "manual_text",
+        is_active: true,
+      },
+    });
+    res.json(context);
   } catch (error) {
     next(error);
   }
@@ -208,11 +189,11 @@ router.put("/context", async (req, res, next) => {
 router.get("/resume-versions", async (_req, res, next) => {
   try {
     const profile = await getOrCreateDefaultProfile();
-    const result = await pool.query(
-      "SELECT * FROM resume_versions WHERE user_profile_id = $1 ORDER BY updated_at DESC",
-      [profile.id],
-    );
-    res.json(result.rows);
+    const resumes = await prisma.resumeVersion.findMany({
+      where: { user_profile_id: profile.id },
+      orderBy: { updated_at: "desc" },
+    });
+    res.json(resumes);
   } catch (error) {
     next(error);
   }
@@ -231,24 +212,17 @@ router.post("/resume-versions", async (req, res, next) => {
       })
       .parse(req.body);
 
-    const result = await pool.query(
-      `
-        INSERT INTO resume_versions (
-          user_profile_id, label, file_name, parsed_text, target_role, metadata
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *
-      `,
-      [
-        profile.id,
-        body.label,
-        body.fileName ?? null,
-        body.parsedText,
-        body.targetRole ?? null,
-        JSON.stringify(body.metadata),
-      ],
-    );
-    res.status(201).json(result.rows[0]);
+    const resume = await prisma.resumeVersion.create({
+      data: {
+        user_profile_id: profile.id,
+        label: body.label,
+        file_name: body.fileName ?? null,
+        parsed_text: body.parsedText,
+        target_role: body.targetRole ?? null,
+        metadata: body.metadata as Prisma.InputJsonValue,
+      },
+    });
+    res.status(201).json(resume);
   } catch (error) {
     next(error);
   }
@@ -269,21 +243,26 @@ router.post("/resume-versions/tailor", async (req, res, next) => {
 
     let resumeText = body.resumeText;
     if (!resumeText && body.resumeVersionId) {
-      const resume = await pool.query(
-        "SELECT parsed_text FROM resume_versions WHERE id = $1 AND user_profile_id = $2",
-        [body.resumeVersionId, profile.id],
-      );
-      resumeText = resume.rows[0]?.parsed_text;
+      const resume = await prisma.resumeVersion.findFirst({
+        where: {
+          id: body.resumeVersionId,
+          user_profile_id: profile.id,
+        },
+        select: { parsed_text: true },
+      });
+      resumeText = resume?.parsed_text ?? undefined;
     }
     if (!resumeText) {
       throw new Error("Provide resumeText or resumeVersionId.");
     }
 
-    const contextDocuments = await pool.query(
-      "SELECT content FROM user_context_documents WHERE user_profile_id = $1 AND is_active = true ORDER BY updated_at DESC LIMIT 3",
-      [profile.id],
-    );
-    const userContext = contextDocuments.rows.map((row) => row.content).join("\n\n");
+    const contextDocuments = await prisma.userContextDocument.findMany({
+      where: { user_profile_id: profile.id, is_active: true },
+      orderBy: { updated_at: "desc" },
+      take: 3,
+      select: { content: true },
+    });
+    const userContext = contextDocuments.map((row) => row.content).join("\n\n");
     const provider = getProvider();
     const fallbackProvider = getProvider(config.aiFallbackProvider);
     const activeProvider =
@@ -302,28 +281,20 @@ router.post("/resume-versions/tailor", async (req, res, next) => {
 
     let savedResume = null;
     if (body.save) {
-      const saved = await pool.query(
-        `
-          INSERT INTO resume_versions (
-            user_profile_id, label, parsed_text, target_role, metadata
-          )
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
-        `,
-        [
-          profile.id,
-          body.label,
-          draft.text,
-          null,
-          JSON.stringify({
+      savedResume = await prisma.resumeVersion.create({
+        data: {
+          user_profile_id: profile.id,
+          label: body.label,
+          parsed_text: draft.text,
+          target_role: null,
+          metadata: {
             generated: true,
             provider: draft.provider,
             model: draft.model,
             sourceContext: draft.sourceContext,
-          }),
-        ],
-      );
-      savedResume = saved.rows[0];
+          } as Prisma.InputJsonValue,
+        },
+      });
     }
 
     res.json({
@@ -353,53 +324,43 @@ router.post("/application-sessions/resolve", async (req, res, next) => {
     const canonical = canonicalizeUrl(body.pageUrl);
     const domain = hostname(body.pageUrl);
 
-    const existing = await pool.query(
-      `
-        SELECT * FROM application_sessions
-        WHERE user_profile_id = $1
-          AND status = 'active'
-          AND (canonical_job_url = $2 OR ats_domain = $3)
-        ORDER BY last_seen_at DESC
-        LIMIT 1
-      `,
-      [profile.id, canonical, domain],
-    );
+    const existing = await prisma.applicationSession.findFirst({
+      where: {
+        user_profile_id: profile.id,
+        status: "active",
+        OR: [
+          { canonical_job_url: canonical },
+          ...(domain ? [{ ats_domain: domain }] : []),
+        ],
+      },
+      orderBy: { last_seen_at: "desc" },
+    });
 
-    if (existing.rows[0]) {
-      const updated = await pool.query(
-        `
-          UPDATE application_sessions
-          SET last_seen_at = now(),
-              job_url = $2,
-              current_step = COALESCE(current_step, $3)
-          WHERE id = $1
-          RETURNING *
-        `,
-        [existing.rows[0].id, body.pageUrl, body.pageTitle ?? null],
-      );
-      res.json(updated.rows[0]);
+    if (existing) {
+      const updated = await prisma.applicationSession.update({
+        where: { id: existing.id },
+        data: {
+          last_seen_at: new Date(),
+          job_url: body.pageUrl,
+          current_step: existing.current_step ?? body.pageTitle ?? null,
+        },
+      });
+      res.json(updated);
       return;
     }
 
-    const created = await pool.query(
-      `
-        INSERT INTO application_sessions (
-          user_profile_id, job_url, canonical_job_url, company, role, ats_domain, current_step
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *
-      `,
-      [
-        profile.id,
-        body.pageUrl,
-        canonical,
-        body.companyHint ?? null,
-        body.roleHint ?? null,
-        domain,
-        body.pageTitle ?? null,
-      ],
-    );
-    res.status(201).json(created.rows[0]);
+    const created = await prisma.applicationSession.create({
+      data: {
+        user_profile_id: profile.id,
+        job_url: body.pageUrl,
+        canonical_job_url: canonical,
+        company: body.companyHint ?? null,
+        role: body.roleHint ?? null,
+        ats_domain: domain,
+        current_step: body.pageTitle ?? null,
+      },
+    });
+    res.status(201).json(created);
   } catch (error) {
     next(error);
   }
@@ -408,11 +369,11 @@ router.post("/application-sessions/resolve", async (req, res, next) => {
 router.get("/application-sessions", async (_req, res, next) => {
   try {
     const profile = await getOrCreateDefaultProfile();
-    const result = await pool.query(
-      "SELECT * FROM application_sessions WHERE user_profile_id = $1 ORDER BY last_seen_at DESC",
-      [profile.id],
-    );
-    res.json(result.rows);
+    const sessions = await prisma.applicationSession.findMany({
+      where: { user_profile_id: profile.id },
+      orderBy: { last_seen_at: "desc" },
+    });
+    res.json(sessions);
   } catch (error) {
     next(error);
   }
@@ -430,24 +391,20 @@ router.post("/application-sessions/:id/page-snapshots", async (req, res, next) =
         visibleText: z.string().max(100000).optional(),
       })
       .parse(req.body);
-    const result = await pool.query(
-      `
-        INSERT INTO application_page_snapshots (
-          application_session_id, page_url, page_title, step_label, field_snapshot, visible_text_hash
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *
-      `,
-      [
-        req.params.id,
-        body.pageUrl,
-        body.pageTitle ?? null,
-        body.stepLabel ?? null,
-        JSON.stringify({ fields: body.fields, visibleText: body.visibleText?.slice(0, 20000) }),
-        body.visibleTextHash ?? null,
-      ],
-    );
-    res.status(201).json(result.rows[0]);
+    const snapshot = await prisma.applicationPageSnapshot.create({
+      data: {
+        application_session_id: req.params.id,
+        page_url: body.pageUrl,
+        page_title: body.pageTitle ?? null,
+        step_label: body.stepLabel ?? null,
+        field_snapshot: {
+          fields: body.fields,
+          visibleText: body.visibleText?.slice(0, 20000),
+        },
+        visible_text_hash: body.visibleTextHash ?? null,
+      },
+    });
+    res.status(201).json(snapshot);
   } catch (error) {
     next(error);
   }
@@ -494,32 +451,19 @@ router.post("/application-sessions/:id/filled-fields", async (req, res, next) =>
 
     const inserted = [];
     for (const field of body.fields) {
-      const result = await pool.query(
-        `
-          INSERT INTO filled_field_logs (
-            application_session_id,
-            page_snapshot_id,
-            field_suggestion_id,
-            field_id,
-            field_label,
-            filled_value_redacted,
-            value_hash,
-            user_confirmed
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-          RETURNING *
-        `,
-        [
-          req.params.id,
-          body.pageSnapshotId,
-          field.fieldSuggestionId ?? null,
-          field.fieldId,
-          field.fieldLabel ?? null,
-          redactValue(field.filledValue),
-          hashValue(field.filledValue),
-        ],
-      );
-      inserted.push(result.rows[0]);
+      const log = await prisma.filledFieldLog.create({
+        data: {
+          application_session_id: req.params.id,
+          page_snapshot_id: body.pageSnapshotId,
+          field_suggestion_id: field.fieldSuggestionId ?? null,
+          field_id: field.fieldId,
+          field_label: field.fieldLabel ?? null,
+          filled_value_redacted: redactValue(field.filledValue),
+          value_hash: hashValue(field.filledValue),
+          user_confirmed: true,
+        },
+      });
+      inserted.push(log);
     }
     res.status(201).json({ filledFields: inserted });
   } catch (error) {
