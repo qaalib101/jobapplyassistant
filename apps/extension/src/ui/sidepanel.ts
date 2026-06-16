@@ -48,6 +48,11 @@ interface ContextSummary {
   uploadedContextChars: number;
 }
 
+interface ContextDocument {
+  content?: string;
+  is_active?: boolean;
+}
+
 let activeTabId: number | undefined;
 let activeSession: ApplicationSession | undefined;
 let pageSnapshotId: string | undefined;
@@ -131,20 +136,32 @@ async function backendBaseUrl() {
   return stored.backendBaseUrl || "http://jobapply.localhost:8080";
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
+async function api<T>(path: string, init?: RequestInit, timeoutMs = 30000): Promise<T> {
   const baseUrl = await backendBaseUrl();
-  const response = await fetch(`${baseUrl}/api${path}`, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || `Request failed with ${response.status}`);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl}/api${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error || `Request failed with ${response.status}`);
+    }
+    return response.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("API request timed out. Check the backend logs or switch AI_PROVIDER=mock.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return response.json() as Promise<T>;
 }
 
 async function activeTab() {
@@ -202,6 +219,23 @@ function renderSession(session: ApplicationSession) {
     ? `Context: ${contextSummary.uploadedContextCount} uploaded docs, ${contextSummary.resumeCount} resumes, ${contextSummary.answerCount} saved answers`
     : "Context: not loaded yet";
   sessionText.textContent = `${sessionLabel}\n${contextLabel}`;
+}
+
+async function loadContextStatus() {
+  const [context, answers, resumes] = await Promise.all([
+    api<ContextDocument>("/context", undefined, 10000),
+    api<unknown[]>("/answer-bank", undefined, 10000),
+    api<unknown[]>("/resume-versions", undefined, 10000),
+  ]);
+  const uploadedContextChars = context.content?.length ?? 0;
+  contextSummary = {
+    profilePresent: true,
+    answerCount: answers.length,
+    resumeCount: resumes.length,
+    uploadedContextCount: uploadedContextChars > 0 || context.is_active ? 1 : 0,
+    uploadedContextChars,
+  };
+  if (activeSession) renderSession(activeSession);
 }
 
 function renderSuggestions() {
@@ -433,6 +467,7 @@ async function scanPage() {
       }),
     });
     renderSession(activeSession);
+    await loadContextStatus();
 
     const snapshot = await api<{ id: string }>(
       `/application-sessions/${activeSession.id}/page-snapshots`,
@@ -459,6 +494,7 @@ async function scanPage() {
           visibleText: scannedPageText,
         }),
       },
+      70000,
     );
     setAnswerLoading(false);
     suggestions = response.suggestions;
@@ -542,4 +578,7 @@ resumeFileInput?.addEventListener("change", loadResumeFile);
 saveResumeButton?.addEventListener("click", saveResume);
 tailorResumeButton?.addEventListener("click", tailorResumeFromScan);
 restoreCollapsedState();
+loadContextStatus().catch(() => {
+  contextSummary = undefined;
+});
 loadLatestResume();
