@@ -66,4 +66,9 @@ export interface AIProvider {
   configured(): boolean;
   healthCheck(): Promise<boolean>;
   generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult>;
+  tailorResume?(input: {
+    resumeText: string;
+    jobDescription: string;
+    userContext: string;
+  }): Promise<DraftAnswerResult>;
 }

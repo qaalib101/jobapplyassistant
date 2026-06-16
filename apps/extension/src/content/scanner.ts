@@ -153,12 +153,21 @@ function scanVisibleFields(): FieldMetadata[] {
     });
 }
 
+function visiblePageText() {
+  return (document.body?.innerText ?? "")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 60000);
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== "SCAN_VISIBLE_FIELDS") return false;
   sendResponse({
     pageUrl: window.location.href,
     pageTitle: document.title,
     fields: scanVisibleFields(),
+    visibleText: visiblePageText(),
   });
   return true;
 });

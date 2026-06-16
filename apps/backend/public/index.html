@@ -35,6 +35,25 @@
           <button id="saveButton" type="button">Save context</button>
         </div>
       </section>
+
+      <section class="panel">
+        <h2>Resume Workspace</h2>
+        <p class="section-copy">Upload a text resume or construct one here. It will be available to the extension side panel.</p>
+
+        <label for="resumeFile">Resume file</label>
+        <input id="resumeFile" type="file" accept=".txt,.md,.text" />
+
+        <label for="resumeLabel">Resume label</label>
+        <input id="resumeLabel" type="text" value="Base resume" />
+
+        <label for="resumeText">Resume text</label>
+        <textarea id="resumeText" spellcheck="true" placeholder="Paste or build the resume you want to use for tailoring."></textarea>
+
+        <div class="actions">
+          <div id="resumeStatus" class="status">No resume loaded.</div>
+          <button id="saveResumeButton" type="button">Save resume</button>
+        </div>
+      </section>
     </main>
 
     <script src="app.js"></script>

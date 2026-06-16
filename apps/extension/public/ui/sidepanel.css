@@ -91,6 +91,7 @@ button:disabled {
 
 .status,
 .session,
+.resume-panel,
 .suggestion {
   border: 1px solid #d8dee6;
   border-radius: 6px;
@@ -106,9 +107,25 @@ button:disabled {
   margin-bottom: 10px;
 }
 
+.resume-panel {
+  margin-bottom: 10px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .label,
 .meta {
   color: #627386;
+  font-size: 12px;
+}
+
+.hint {
+  color: #435466;
   font-size: 12px;
 }
 
@@ -158,6 +175,26 @@ textarea.value {
 
 input.value {
   min-height: 36px;
+}
+
+#resumeWorkspace {
+  margin-top: 10px;
+}
+
+#resumeFileInput {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+#resumeText {
+  width: 100%;
+  min-height: 130px;
+  border: 1px solid #c8d1dc;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  padding: 8px;
+  resize: vertical;
 }
 
 .source {

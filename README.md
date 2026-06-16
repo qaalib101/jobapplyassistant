@@ -136,9 +136,12 @@ Use these pages to demonstrate the extension flow without submitting anything to
 1. Open a demo form.
 2. Open the extension side panel.
 3. Click **Scan page**.
-4. Review and edit suggestions.
-5. Select fields to fill.
-6. Click **Fill selected**.
+4. Upload, paste, or edit resume text in the side panel.
+5. Click **Tailor from scanned JD** to create a reviewed resume draft.
+6. Review and edit field suggestions.
+7. Click **Fill all reviewed** or select fields and click **Fill selected**.
+
+The extension locks fill actions to the tab that was scanned. If you click another tab after scanning, filling still targets the scanned application page.
 
 ## AI Providers
 
@@ -214,6 +217,9 @@ GET /api/profile
 PUT /api/profile
 GET /api/context
 PUT /api/context
+GET /api/resume-versions
+POST /api/resume-versions
+POST /api/resume-versions/tailor
 GET /api/answer-bank
 POST /api/answer-bank
 POST /api/application-sessions/resolve
@@ -231,6 +237,8 @@ Implemented:
 - Postgres schema and migrations
 - Local companion API
 - Lightweight AI context UI
+- Resume paste/upload storage
+- Resume tailoring from scanned job descriptions
 - Provider abstraction for DeepSeek, OpenAI, Ollama, mock, and none
 - Deterministic profile and answer-bank matching
 - AI draft fallback for uncommon questions

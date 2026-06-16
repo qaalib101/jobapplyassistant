@@ -31,11 +31,31 @@
           <div id="sessionText"></div>
         </section>
 
+        <section class="resume-panel">
+          <div class="panel-heading">
+            <div>
+              <div class="label">Resume workspace</div>
+              <div class="hint">Upload a text resume or paste/build one here.</div>
+            </div>
+            <button id="toggleResumeButton" class="secondary-button" type="button">Open</button>
+          </div>
+          <div id="resumeWorkspace" hidden>
+            <input id="resumeFileInput" type="file" accept=".txt,.md,.text" />
+            <textarea id="resumeText" placeholder="Paste or construct the resume you want to use. Text and Markdown files are supported for upload in this MVP."></textarea>
+            <div class="toolbar">
+              <button id="saveResumeButton" class="secondary-button" type="button">Save resume</button>
+              <button id="tailorResumeButton" class="secondary-button" type="button">Tailor from scanned JD</button>
+            </div>
+            <div id="resumeStatus" class="source">No resume loaded.</div>
+          </div>
+        </section>
+
         <form id="suggestionsForm" hidden>
           <div class="toolbar">
             <button id="selectHighConfidenceButton" class="secondary-button" type="button">Select high confidence</button>
             <button id="clearSelectionButton" class="secondary-button" type="button">Clear</button>
             <button id="fillButton" type="submit">Fill selected</button>
+            <button id="fillAllButton" type="button">Fill all reviewed</button>
           </div>
           <div id="suggestions"></div>
         </form>

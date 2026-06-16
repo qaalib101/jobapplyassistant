@@ -205,6 +205,140 @@ router.put("/context", async (req, res, next) => {
   }
 });
 
+router.get("/resume-versions", async (_req, res, next) => {
+  try {
+    const profile = await getOrCreateDefaultProfile();
+    const result = await pool.query(
+      "SELECT * FROM resume_versions WHERE user_profile_id = $1 ORDER BY updated_at DESC",
+      [profile.id],
+    );
+    res.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/resume-versions", async (req, res, next) => {
+  try {
+    const profile = await getOrCreateDefaultProfile();
+    const body = z
+      .object({
+        label: z.string().default("Resume"),
+        fileName: z.string().optional(),
+        parsedText: z.string().max(150000),
+        targetRole: z.string().optional(),
+        metadata: z.record(z.unknown()).default({}),
+      })
+      .parse(req.body);
+
+    const result = await pool.query(
+      `
+        INSERT INTO resume_versions (
+          user_profile_id, label, file_name, parsed_text, target_role, metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+      `,
+      [
+        profile.id,
+        body.label,
+        body.fileName ?? null,
+        body.parsedText,
+        body.targetRole ?? null,
+        JSON.stringify(body.metadata),
+      ],
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/resume-versions/tailor", async (req, res, next) => {
+  try {
+    const profile = await getOrCreateDefaultProfile();
+    const body = z
+      .object({
+        resumeVersionId: z.string().optional(),
+        resumeText: z.string().max(150000).optional(),
+        jobDescription: z.string().max(100000),
+        label: z.string().default("Tailored resume draft"),
+        save: z.boolean().default(false),
+      })
+      .parse(req.body);
+
+    let resumeText = body.resumeText;
+    if (!resumeText && body.resumeVersionId) {
+      const resume = await pool.query(
+        "SELECT parsed_text FROM resume_versions WHERE id = $1 AND user_profile_id = $2",
+        [body.resumeVersionId, profile.id],
+      );
+      resumeText = resume.rows[0]?.parsed_text;
+    }
+    if (!resumeText) {
+      throw new Error("Provide resumeText or resumeVersionId.");
+    }
+
+    const contextDocuments = await pool.query(
+      "SELECT content FROM user_context_documents WHERE user_profile_id = $1 AND is_active = true ORDER BY updated_at DESC LIMIT 3",
+      [profile.id],
+    );
+    const userContext = contextDocuments.rows.map((row) => row.content).join("\n\n");
+    const provider = getProvider();
+    const fallbackProvider = getProvider(config.aiFallbackProvider);
+    const activeProvider =
+      provider.configured() && provider.id !== "none" && provider.tailorResume
+        ? provider
+        : fallbackProvider;
+    if (!activeProvider.tailorResume || activeProvider.id === "none") {
+      throw new Error("The active AI provider cannot tailor resumes.");
+    }
+
+    const draft = await activeProvider.tailorResume({
+      resumeText,
+      jobDescription: body.jobDescription,
+      userContext,
+    });
+
+    let savedResume = null;
+    if (body.save) {
+      const saved = await pool.query(
+        `
+          INSERT INTO resume_versions (
+            user_profile_id, label, parsed_text, target_role, metadata
+          )
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *
+        `,
+        [
+          profile.id,
+          body.label,
+          draft.text,
+          null,
+          JSON.stringify({
+            generated: true,
+            provider: draft.provider,
+            model: draft.model,
+            sourceContext: draft.sourceContext,
+          }),
+        ],
+      );
+      savedResume = saved.rows[0];
+    }
+
+    res.json({
+      tailoredResume: draft.text,
+      confidence: draft.confidence,
+      provider: draft.provider,
+      model: draft.model,
+      sourceContext: draft.sourceContext,
+      savedResume,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/application-sessions/resolve", async (req, res, next) => {
   try {
     const profile = await getOrCreateDefaultProfile();
@@ -293,6 +427,7 @@ router.post("/application-sessions/:id/page-snapshots", async (req, res, next) =
         stepLabel: z.string().optional(),
         fields: z.array(fieldSchema),
         visibleTextHash: z.string().optional(),
+        visibleText: z.string().max(100000).optional(),
       })
       .parse(req.body);
     const result = await pool.query(
@@ -308,7 +443,7 @@ router.post("/application-sessions/:id/page-snapshots", async (req, res, next) =
         body.pageUrl,
         body.pageTitle ?? null,
         body.stepLabel ?? null,
-        JSON.stringify({ fields: body.fields }),
+        JSON.stringify({ fields: body.fields, visibleText: body.visibleText?.slice(0, 20000) }),
         body.visibleTextHash ?? null,
       ],
     );

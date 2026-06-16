@@ -93,4 +93,69 @@ export class OpenAiCompatibleProvider implements AIProvider {
       clearTimeout(timeout);
     }
   }
+
+  async tailorResume(input: {
+    resumeText: string;
+    jobDescription: string;
+    userContext: string;
+  }): Promise<DraftAnswerResult> {
+    if (!this.apiKey) {
+      throw new Error(`${this.label} API key is not configured.`);
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.aiTimeoutMs);
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Tailor a resume draft for a specific job description. Preserve truthful experience, do not invent credentials, keep concise resume formatting, and return only the revised resume text.",
+            },
+            {
+              role: "user",
+              content: [
+                `Original resume:\n${input.resumeText}`,
+                `Job description:\n${input.jobDescription}`,
+                `Additional user context:\n${input.userContext}`,
+              ].join("\n\n"),
+            },
+          ],
+          temperature: 0.25,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`${this.label} request failed with ${response.status}`);
+      }
+
+      const payload = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const text = payload.choices?.[0]?.message?.content?.trim();
+      if (!text) throw new Error(`${this.label} returned no tailored resume.`);
+
+      return {
+        text,
+        confidence: 0.6,
+        sourceContext: {
+          contextUsed: "resume_job_description_user_context",
+          provider: this.id,
+        },
+        provider: this.id,
+        model: this.model,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 }

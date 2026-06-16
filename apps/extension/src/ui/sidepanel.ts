@@ -29,6 +29,7 @@ interface ScanResult {
   pageUrl: string;
   pageTitle: string;
   fields: FieldMetadata[];
+  visibleText?: string;
 }
 
 interface ApplicationSession {
@@ -44,15 +45,25 @@ let activeSession: ApplicationSession | undefined;
 let pageSnapshotId: string | undefined;
 let suggestions: Suggestion[] = [];
 let detectedFields: FieldMetadata[] = [];
+let scannedPageText = "";
+let savedResumeVersionId: string | undefined;
 
 const scanButton = document.querySelector<HTMLButtonElement>("#scanButton");
 const fillButton = document.querySelector<HTMLButtonElement>("#fillButton");
+const fillAllButton = document.querySelector<HTMLButtonElement>("#fillAllButton");
 const collapseButton = document.querySelector<HTMLButtonElement>("#collapseButton");
 const expandButton = document.querySelector<HTMLButtonElement>("#expandButton");
+const toggleResumeButton = document.querySelector<HTMLButtonElement>("#toggleResumeButton");
+const saveResumeButton = document.querySelector<HTMLButtonElement>("#saveResumeButton");
+const tailorResumeButton = document.querySelector<HTMLButtonElement>("#tailorResumeButton");
 const selectHighConfidenceButton = document.querySelector<HTMLButtonElement>(
   "#selectHighConfidenceButton",
 );
 const clearSelectionButton = document.querySelector<HTMLButtonElement>("#clearSelectionButton");
+const resumeWorkspace = document.querySelector<HTMLElement>("#resumeWorkspace");
+const resumeFileInput = document.querySelector<HTMLInputElement>("#resumeFileInput");
+const resumeText = document.querySelector<HTMLTextAreaElement>("#resumeText");
+const resumeStatus = document.querySelector<HTMLElement>("#resumeStatus");
 const collapsedView = document.querySelector<HTMLElement>("#collapsedView");
 const expandedView = document.querySelector<HTMLElement>("#expandedView");
 const statusElement = document.querySelector<HTMLElement>("#status");
@@ -63,6 +74,10 @@ const suggestionsElement = document.querySelector<HTMLElement>("#suggestions");
 
 function setStatus(text: string) {
   if (statusElement) statusElement.textContent = text;
+}
+
+function setResumeStatus(text: string) {
+  if (resumeStatus) resumeStatus.textContent = text;
 }
 
 async function setCollapsed(collapsed: boolean) {
@@ -134,6 +149,13 @@ async function ensureContentScripts(tabId: number) {
     target: { tabId },
     files: ["content/scanner.js", "content/filler.js"],
   });
+}
+
+function lockedTabId() {
+  if (!activeTabId) {
+    throw new Error("Scan a page first so the extension can lock onto that tab.");
+  }
+  return activeTabId;
 }
 
 function renderSession(session: ApplicationSession) {
@@ -238,6 +260,103 @@ function selectHighConfidence() {
     });
 }
 
+function selectedSuggestionsFromDom(fillAll = false) {
+  if (fillAll) return suggestions;
+  const selected = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[name="field"]:checked'),
+  ).map((input) => input.value);
+  return suggestions.filter((suggestion) => selected.includes(suggestion.fieldId));
+}
+
+async function saveResume() {
+  if (!resumeText?.value.trim()) {
+    setResumeStatus("Paste or upload resume text first.");
+    return;
+  }
+
+  saveResumeButton?.setAttribute("disabled", "true");
+  setResumeStatus("Saving resume...");
+  try {
+    const saved = await api<{ id: string; label: string }>("/resume-versions", {
+      method: "POST",
+      body: JSON.stringify({
+        label: "Side panel resume",
+        parsedText: resumeText.value,
+        metadata: { source: "extension_side_panel" },
+      }),
+    });
+    savedResumeVersionId = saved.id;
+    setResumeStatus(`Saved resume: ${saved.label}`);
+  } catch (error) {
+    setResumeStatus(error instanceof Error ? error.message : "Could not save resume.");
+  } finally {
+    saveResumeButton?.removeAttribute("disabled");
+  }
+}
+
+async function tailorResumeFromScan() {
+  if (!resumeText?.value.trim() && !savedResumeVersionId) {
+    setResumeStatus("Paste, upload, or save a resume first.");
+    return;
+  }
+  if (!scannedPageText) {
+    setResumeStatus("Scan the job page first so the JD can be used.");
+    return;
+  }
+
+  tailorResumeButton?.setAttribute("disabled", "true");
+  setResumeStatus("Tailoring resume from scanned job description...");
+  try {
+    const response = await api<{
+      tailoredResume: string;
+      provider: string;
+      savedResume?: { id: string; label: string } | null;
+    }>("/resume-versions/tailor", {
+      method: "POST",
+      body: JSON.stringify({
+        resumeVersionId: savedResumeVersionId,
+        resumeText: resumeText?.value || undefined,
+        jobDescription: scannedPageText,
+        label: "Tailored resume draft",
+        save: true,
+      }),
+    });
+    if (resumeText) resumeText.value = response.tailoredResume;
+    if (response.savedResume?.id) savedResumeVersionId = response.savedResume.id;
+    setResumeStatus(`Tailored resume with ${response.provider}. Review before using.`);
+  } catch (error) {
+    setResumeStatus(error instanceof Error ? error.message : "Could not tailor resume.");
+  } finally {
+    tailorResumeButton?.removeAttribute("disabled");
+  }
+}
+
+async function loadResumeFile() {
+  const file = resumeFileInput?.files?.[0];
+  if (!file || !resumeText) return;
+  if (!/\.(txt|md|text)$/i.test(file.name)) {
+    setResumeStatus("This MVP supports text and Markdown resume files.");
+    return;
+  }
+  resumeText.value = await file.text();
+  setResumeStatus(`Loaded ${file.name}. Save it before tailoring if you want it stored.`);
+}
+
+async function loadLatestResume() {
+  try {
+    const resumes = await api<Array<{ id: string; label: string; parsed_text?: string }>>(
+      "/resume-versions",
+    );
+    const latest = resumes[0];
+    if (!latest) return;
+    savedResumeVersionId = latest.id;
+    if (resumeText && latest.parsed_text) resumeText.value = latest.parsed_text;
+    setResumeStatus(`Loaded latest saved resume: ${latest.label}`);
+  } catch {
+    setResumeStatus("Resume workspace ready.");
+  }
+}
+
 async function scanPage() {
   if (!scanButton) return;
   scanButton.disabled = true;
@@ -251,6 +370,7 @@ async function scanPage() {
       type: "SCAN_VISIBLE_FIELDS",
     });
     detectedFields = scan.fields;
+    scannedPageText = scan.visibleText ?? "";
 
     setStatus(`Found ${scan.fields.length} visible fields. Resolving session...`);
 
@@ -271,6 +391,7 @@ async function scanPage() {
           pageUrl: scan.pageUrl,
           pageTitle: scan.pageTitle,
           fields: scan.fields,
+          visibleText: scannedPageText,
         }),
       },
     );
@@ -300,16 +421,10 @@ async function scanPage() {
   }
 }
 
-async function fillSelected(event: SubmitEvent) {
-  event.preventDefault();
-  if (!activeTabId || !activeSession || !pageSnapshotId) return;
+async function fillSuggestions(fillAll = false) {
+  if (!activeSession || !pageSnapshotId) return;
 
-  const selected = Array.from(
-    document.querySelectorAll<HTMLInputElement>('input[name="field"]:checked'),
-  ).map((input) => input.value);
-  const selectedSuggestions = suggestions.filter((suggestion) =>
-    selected.includes(suggestion.fieldId),
-  );
+  const selectedSuggestions = selectedSuggestionsFromDom(fillAll);
   if (!selectedSuggestions.length) {
     setStatus("Select at least one suggestion to fill.");
     return;
@@ -319,7 +434,7 @@ async function fillSelected(event: SubmitEvent) {
   setStatus("Filling selected fields...");
 
   try {
-    await chrome.tabs.sendMessage(activeTabId, {
+    await chrome.tabs.sendMessage(lockedTabId(), {
       type: "FILL_SELECTED_FIELDS",
       fields: selectedSuggestions.map((suggestion) => ({
         fieldId: suggestion.fieldId,
@@ -347,10 +462,25 @@ async function fillSelected(event: SubmitEvent) {
   }
 }
 
+async function fillSelected(event: SubmitEvent) {
+  event.preventDefault();
+  await fillSuggestions(false);
+}
+
 scanButton?.addEventListener("click", scanPage);
 suggestionsForm?.addEventListener("submit", fillSelected);
+fillAllButton?.addEventListener("click", () => fillSuggestions(true));
 collapseButton?.addEventListener("click", () => setCollapsed(true));
 expandButton?.addEventListener("click", () => setCollapsed(false));
 selectHighConfidenceButton?.addEventListener("click", selectHighConfidence);
 clearSelectionButton?.addEventListener("click", () => setAllSelections(false));
+toggleResumeButton?.addEventListener("click", () => {
+  if (!resumeWorkspace || !toggleResumeButton) return;
+  resumeWorkspace.hidden = !resumeWorkspace.hidden;
+  toggleResumeButton.textContent = resumeWorkspace.hidden ? "Open" : "Close";
+});
+resumeFileInput?.addEventListener("change", loadResumeFile);
+saveResumeButton?.addEventListener("click", saveResume);
+tailorResumeButton?.addEventListener("click", tailorResumeFromScan);
 restoreCollapsedState();
+loadLatestResume();

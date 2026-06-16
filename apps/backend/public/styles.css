@@ -27,9 +27,18 @@ h1 {
   font-size: 24px;
 }
 
+h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
 p {
   margin: 0;
   color: #526273;
+}
+
+.section-copy {
+  margin-bottom: 16px;
 }
 
 a {
@@ -46,6 +55,7 @@ nav {
   border: 1px solid #d8dee6;
   border-radius: 8px;
   background: white;
+  margin-bottom: 18px;
   padding: 18px;
 }
 

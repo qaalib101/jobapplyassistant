@@ -62,4 +62,52 @@ export class OllamaProvider implements AIProvider {
       clearTimeout(timeout);
     }
   }
+
+  async tailorResume(input: {
+    resumeText: string;
+    jobDescription: string;
+    userContext: string;
+  }): Promise<DraftAnswerResult> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.aiTimeoutMs);
+    try {
+      const response = await fetch(`${config.ollama.baseUrl}/api/generate`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: config.ollama.model,
+          stream: false,
+          prompt: [
+            "Tailor a resume draft for the job description.",
+            "Preserve truthful experience. Do not invent credentials. Return only the revised resume text.",
+            `Original resume:\n${input.resumeText}`,
+            `Job description:\n${input.jobDescription}`,
+            `Additional user context:\n${input.userContext}`,
+          ].join("\n\n"),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama request failed with ${response.status}`);
+      }
+
+      const payload = (await response.json()) as { response?: string };
+      const text = payload.response?.trim();
+      if (!text) throw new Error("Ollama returned no tailored resume.");
+
+      return {
+        text,
+        confidence: 0.52,
+        sourceContext: {
+          contextUsed: "resume_job_description_user_context",
+          provider: this.id,
+        },
+        provider: this.id,
+        model: config.ollama.model,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 }
