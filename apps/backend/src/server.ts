@@ -1,12 +1,30 @@
-import cors from "cors";
+import cors, { CorsOptions } from "cors";
 import express from "express";
 import path from "node:path";
 import { config } from "./config";
 import { router } from "./routes";
 
+// Import the logger
+import logger from './logger';
+
 const app = express();
 
+// Middleware for request logging
 app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+// Use winston middleware to log requests and responses
+import expressWinston from 'express-winston';
+import winston from "winston";
+const loggerOptions = {
+  transports: [
+    new winston.transports.Console(),
+  ],
+  format: winston.format.json(),
+};
+
+app.use(expressWinston.logger(loggerOptions));
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -58,6 +76,4 @@ app.use(
   },
 );
 
-app.listen(config.port, () => {
-  console.log(`Job Apply Assistant API listening on http://localhost:${config.port}`);
-});
+// Remove duplicate console log and update logger message
