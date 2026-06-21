@@ -13,17 +13,37 @@ function hash(value: string) {
   return Math.abs(result).toString(36);
 }
 
+function textFromIds(ids: string | null) {
+  if (!ids) return "";
+  return ids
+    .split(/\s+/)
+    .map((id) => document.getElementById(id)?.textContent?.trim() ?? "")
+    .filter(Boolean)
+    .join(" ");
+}
+
 function labelFor(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
-  if (element.labels?.length) return Array.from(element.labels)[0]?.textContent?.trim() ?? "";
-  return (
-    element.getAttribute("aria-label") ||
-    (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+  if (element.labels?.length) {
+    return Array.from(element.labels)
+      .map((label) => label.textContent?.trim() ?? "")
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  const ariaLabel = element.getAttribute("aria-label");
+  if (ariaLabel) return ariaLabel;
+
+  const ariaLabelledBy = textFromIds(element.getAttribute("aria-labelledby"));
+  if (ariaLabelledBy) return ariaLabelledBy;
+
+  const nearby = element.closest("label, div, li, fieldset")?.textContent?.trim();
+  if (nearby && nearby.length < 180) return nearby;
+
+  const placeholder =
+    element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
       ? element.placeholder
-      : "") ||
-    element.name ||
-    element.id ||
-    ""
-  );
+      : "";
+  return placeholder || element.name || element.id || "";
 }
 
 function domPath(element: Element) {

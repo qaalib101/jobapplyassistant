@@ -126,7 +126,13 @@ function scanVisibleFields(): FieldMetadata[] {
   const seenGroups = new Set<string>();
 
   return elements
-    .filter((element) => !element.disabled && element.type !== "hidden" && isVisible(element))
+    .filter(
+      (element) =>
+        !element.disabled &&
+        !(element instanceof HTMLInputElement &&
+          ["hidden", "submit", "button", "image", "reset"].includes(element.type)) &&
+        isVisible(element),
+    )
     .filter((element) => {
       if (element instanceof HTMLInputElement && ["radio", "checkbox"].includes(element.type)) {
         const groupKey = `${element.type}:${element.name || element.id}`;
@@ -138,6 +144,14 @@ function scanVisibleFields(): FieldMetadata[] {
     .map((element) => {
       const label = labelFor(element);
       const pathHash = hash(domPath(element));
+      const required =
+        element instanceof HTMLInputElement && element.type === "radio" && element.name
+          ? Array.from(
+              document.querySelectorAll<HTMLInputElement>(
+                `input[name="${CSS.escape(element.name)}"]`,
+              ),
+            ).some((el) => el.required)
+          : element.required;
       return {
         fieldId: hash([label, element.name, element.id, fieldType(element), pathHash].join("|")),
         label,
@@ -145,7 +159,7 @@ function scanVisibleFields(): FieldMetadata[] {
         id: element.id || undefined,
         type: fieldType(element),
         placeholder: "placeholder" in element ? element.placeholder || undefined : undefined,
-        required: element.required,
+        required,
         options: optionsFor(element),
         domPathHash: pathHash,
         visible: true,
