@@ -14,11 +14,11 @@ export class NoneProvider implements AIProvider {
   }
 
   async generateAnswerDraft(_input: DraftAnswerInput): Promise<DraftAnswerResult> {
-    throw new Error("AI generation is disabled.");
+    throw new Error("No AI provider configured");
   }
 
   async generateAnswerDrafts(): Promise<never> {
-    throw new Error("AI generation is disabled.");
+    throw new Error("No AI provider configured");
   }
 
   async tailorResume(): Promise<DraftAnswerResult> {

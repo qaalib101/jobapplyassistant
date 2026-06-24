@@ -4,6 +4,7 @@ import {
   BatchAnswerResult,
   DraftAnswerInput,
   DraftAnswerResult,
+  FieldMetadata,
 } from "../types";
 
 export class MockProvider implements AIProvider {
@@ -33,13 +34,13 @@ export class MockProvider implements AIProvider {
   }
 
   async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {
-    return input.fields.map(({ field, question }) => ({
-      fieldId: field.fieldId,
-      text: `Draft answer for "${question}". Review and personalize before using.`,
+    return input.fields.map((field) => ({
+      fieldId: field.field.fieldId,
+      text: `Draft answer for "${field.question}". Review and personalize before using.`,
       confidence: 0.35,
       sourceContext: {
         contextUsed: "mock_batch",
-        fieldId: field.fieldId,
+        fieldId: field.field.fieldId,
         jobDescriptionProvided: Boolean(input.jobDescription),
       },
       provider: this.id,
