@@ -7,6 +7,7 @@ import {
   DraftAnswerResult,
 } from "../types";
 import { extractJsonObject } from "./json";
+import { BaseProvider } from "./baseProvider";
 
 interface DeepSeekPayload {
   answer?: string;

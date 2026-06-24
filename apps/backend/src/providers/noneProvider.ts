@@ -1,9 +1,14 @@
 import { AIProvider, DraftAnswerInput, DraftAnswerResult } from "../types";
+import { BaseProvider } from "./baseProvider";
 
-export class NoneProvider implements AIProvider {
+export class NoneProvider extends BaseProvider {
   id = "none";
   label = "None";
   mode = "disabled" as const;
+
+  constructor() {
+    super("none", "None", "disabled");
+  }
 
   configured() {
     return true;

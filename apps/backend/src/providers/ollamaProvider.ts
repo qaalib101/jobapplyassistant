@@ -7,11 +7,16 @@ import {
   DraftAnswerResult,
 } from "../types";
 import { extractJsonObject } from "./json";
+import { BaseProvider } from "./baseProvider";
 
-export class OllamaProvider implements AIProvider {
+export class OllamaProvider extends BaseProvider {
   id = "ollama";
   label = "Ollama";
   mode = "local" as const;
+
+  constructor() {
+    super("ollama", "Ollama", "local");
+  }
 
   configured() {
     return Boolean(config.ollama.baseUrl && config.ollama.model);
@@ -26,26 +31,8 @@ export class OllamaProvider implements AIProvider {
     }
   }
 
-  async generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult> {
-    const batch = await this.generateAnswerDrafts({
-      fields: [{ field: input.field, question: input.question }],
-      context: input.context,
-      jobDescription: input.jobDescription,
-    });
-    const first = batch[0];
-    if (!first) throw new Error("Ollama returned no draft text.");
-    return {
-      text: first.text,
-      confidence: first.confidence,
-      sourceContext: first.sourceContext,
-      provider: first.provider,
-      model: first.model,
-    };
-  }
-
   async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.aiTimeoutMs);
+    const { controller, timeoutId } = this.createTimeoutController();
     try {
       const response = await fetch(`${config.ollama.baseUrl}/api/generate`, {
         method: "POST",
@@ -89,19 +76,21 @@ export class OllamaProvider implements AIProvider {
           fieldId: answer.fieldId!,
           text: answer.answer!,
           confidence: Math.max(0, Math.min(1, answer.confidence ?? 0.55)),
-          sourceContext: {
-            ...(answer.sourceContext ?? {}),
-            needsReview: answer.needsReview ?? true,
-            contextUsed:
-              answer.sourceContext?.contextUsed ??
-              "batch_profile_resume_answer_bank_uploaded_context_job_description",
-            provider: this.id,
-          },
+          sourceContext: this.createSourceContext(
+            {
+              contextUsed:
+                (answer.sourceContext as Record<string, unknown>)?.contextUsed as string ??
+                "batch_profile_resume_answer_bank_uploaded_context_job_description",
+              needsReview: answer.needsReview ?? true,
+            },
+            this.id,
+            config.ollama.model
+          ),
           provider: this.id,
           model: config.ollama.model,
         }));
     } finally {
-      clearTimeout(timeout);
+      this.clearTimeout(timeoutId);
     }
   }
 
@@ -110,8 +99,7 @@ export class OllamaProvider implements AIProvider {
     jobDescription: string;
     userContext: string;
   }): Promise<DraftAnswerResult> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.aiTimeoutMs);
+    const { controller, timeoutId } = this.createTimeoutController();
     try {
       const response = await fetch(`${config.ollama.baseUrl}/api/generate`, {
         method: "POST",
@@ -141,15 +129,16 @@ export class OllamaProvider implements AIProvider {
       return {
         text,
         confidence: 0.52,
-        sourceContext: {
-          contextUsed: "resume_job_description_user_context",
-          provider: this.id,
-        },
+        sourceContext: this.createSourceContext(
+          { contextUsed: "resume_job_description_user_context" },
+          this.id,
+          config.ollama.model
+        ),
         provider: this.id,
         model: config.ollama.model,
       };
     } finally {
-      clearTimeout(timeout);
+      this.clearTimeout(timeoutId);
     }
   }
 }

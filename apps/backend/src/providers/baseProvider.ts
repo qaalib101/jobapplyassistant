@@ -1,4 +1,5 @@
 import { AIProvider, BatchAnswerInput, BatchAnswerResult, DraftAnswerInput, DraftAnswerResult } from "../types";
+import { config } from "../config";
 
 /**
  * Base class for all AI providers to implement common functionality
@@ -61,5 +62,39 @@ export abstract class BaseProvider implements AIProvider {
     userContext: string;
   }): Promise<DraftAnswerResult> {
     throw new Error(`${this.label} does not support resume tailoring`);
+  }
+
+  /**
+   * Helper method to create a timeout controller with proper cleanup
+   */
+  protected createTimeoutController(): { controller: AbortController; timeoutId: NodeJS.Timeout } {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), config.aiTimeoutMs);
+    return { controller, timeoutId };
+  }
+
+  /**
+   * Helper method to clean up timeout
+   */
+  protected clearTimeout(timeoutId: NodeJS.Timeout): void {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Standardized source context structure for all providers
+   */
+  protected createSourceContext(
+    input: { contextUsed?: string; needsReview?: boolean },
+    providerId: string,
+    model?: string
+  ): Record<string, unknown> {
+    return {
+      contextUsed: input.contextUsed ?? "batch_profile_resume_answer_bank_uploaded_context_job_description",
+      needsReview: input.needsReview ?? true,
+      provider: providerId,
+      ...(model ? { model } : {}),
+    };
   }
 }
