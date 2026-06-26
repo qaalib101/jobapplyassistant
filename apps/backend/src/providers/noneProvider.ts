@@ -1,7 +1,14 @@
-import { AIProvider, DraftAnswerInput, DraftAnswerResult } from "../types";
+import {
+  AIProvider,
+  BatchAnswerInput,
+  BatchAnswerResult,
+  DraftAnswerInput,
+  DraftAnswerResult,
+  FieldMetadata,
+} from "../types";
 import { BaseProvider } from "./baseProvider";
 
-export class NoneProvider extends BaseProvider {
+export class NoneProvider extends BaseProvider implements AIProvider {
   id = "none";
   label = "None";
   mode = "disabled" as const;
@@ -11,22 +18,34 @@ export class NoneProvider extends BaseProvider {
   }
 
   configured() {
-    return true;
+    return false;
   }
 
   async healthCheck() {
-    return true;
+    return false;
   }
 
-  async generateAnswerDraft(_input: DraftAnswerInput): Promise<DraftAnswerResult> {
-    throw new Error("No AI provider configured");
+  async generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult> {
+    throw new Error(`No provider configured for field ${input.field.fieldId}`);
   }
 
-  async generateAnswerDrafts(): Promise<never> {
-    throw new Error("No AI provider configured");
+  async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {
+    const errors = input.fields.map((field) => ({
+      fieldId: field.field.fieldId,
+      text: "",
+      confidence: 0,
+      sourceContext: {},
+      provider: this.id,
+      model: undefined
+    }));
+    return errors;
   }
 
-  async tailorResume(): Promise<DraftAnswerResult> {
-    throw new Error("AI generation is disabled.");
+  async tailorResume(input: {
+    resumeText: string;
+    jobDescription: string;
+    userContext: string;
+  }): Promise<DraftAnswerResult> {
+    throw new Error("No provider configured for resume tailoring");
   }
 }

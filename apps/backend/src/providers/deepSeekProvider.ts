@@ -58,7 +58,12 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   async healthCheck() {
-    return this.configured();
+    try {
+      const response = await fetch(`${this.baseUrl}/v1/models`);
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 
   private async jsonCompletion(prompt: string): Promise<DeepSeekPayload> {

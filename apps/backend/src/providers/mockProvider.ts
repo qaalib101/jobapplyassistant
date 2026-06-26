@@ -6,11 +6,16 @@ import {
   DraftAnswerResult,
   FieldMetadata,
 } from "../types";
+import { BaseProvider } from "./baseProvider";
 
-export class MockProvider implements AIProvider {
+export class MockProvider extends BaseProvider implements AIProvider {
   id = "mock";
   label = "Mock";
   mode = "local" as const;
+
+  constructor() {
+    super("mock", "Mock", "local");
+  }
 
   configured() {
     return true;
@@ -30,6 +35,7 @@ export class MockProvider implements AIProvider {
         jobDescriptionProvided: Boolean(input.jobDescription),
       },
       provider: this.id,
+      model: undefined
     };
   }
 
@@ -44,6 +50,7 @@ export class MockProvider implements AIProvider {
         jobDescriptionProvided: Boolean(input.jobDescription),
       },
       provider: this.id,
+      model: undefined
     }));
   }
 
@@ -73,6 +80,7 @@ export class MockProvider implements AIProvider {
         provider: this.id,
       },
       provider: this.id,
+      model: undefined
     };
   }
 }
