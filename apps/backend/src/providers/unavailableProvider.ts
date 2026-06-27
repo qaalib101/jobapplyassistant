@@ -1,4 +1,4 @@
-import { AIProvider, DraftAnswerInput, DraftAnswerResult } from "../types";
+import { AIProvider, BatchAnswerInput, DraftAnswerInput, DraftAnswerResult } from "../types";
 
 export class UnavailableProvider implements AIProvider {
   label: string;
@@ -23,11 +23,11 @@ export class UnavailableProvider implements AIProvider {
     throw new Error(this.reason);
   }
 
-  async generateAnswerDrafts(): Promise<never> {
+  async generateAnswerDrafts(_input: BatchAnswerInput): Promise<never> {
     throw new Error(this.reason);
   }
 
-  async tailorResume(): Promise<DraftAnswerResult> {
+  async tailorResume(_input: { resumeText: string; jobDescription: string; userContext: string }): Promise<DraftAnswerResult> {
     throw new Error(this.reason);
   }
 }
