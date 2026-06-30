@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 
-dotenv.config({ override: true });
+dotenv.config();
 
 export const config = {
   port: Number(process.env.PORT ?? 4317),
