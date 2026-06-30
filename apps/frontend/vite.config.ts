@@ -4,6 +4,9 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   root: __dirname,
   plugins: [react()],
+  css: {
+    transformer: "postcss",
+  },
   build: {
     outDir: "../../dist/apps/frontend",
     emptyOutDir: true,

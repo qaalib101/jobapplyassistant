@@ -76,4 +76,6 @@ app.use(
   },
 );
 
-// Remove duplicate console log and update logger message
+app.listen(config.port, () => {
+  logger.info(`Server listening on port ${config.port}`);
+});
