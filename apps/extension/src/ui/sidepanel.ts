@@ -1,3 +1,17 @@
+type FieldSensitivity = "normal" | "sensitive" | "manual-only";
+
+type FieldCategory =
+  | "contact"
+  | "personal"
+  | "work"
+  | "demographic"
+  | "eeo"
+  | "disability"
+  | "veteran"
+  | "gender"
+  | "race"
+  | "unknown";
+
 interface FieldMetadata {
   fieldId: string;
   label?: string;
@@ -9,6 +23,10 @@ interface FieldMetadata {
   options?: Array<{ label: string; value: string }> | null;
   domPathHash?: string;
   visible?: boolean;
+  currentValue?: string;
+  checked?: boolean;
+  sensitivity?: FieldSensitivity;
+  category?: FieldCategory;
 }
 
 interface Suggestion {
@@ -306,7 +324,20 @@ function renderSuggestions() {
 
     const source = document.createElement("div");
     source.className = "source";
-    source.textContent = "Detected field · no saved suggestion";
+    const sourceParts = ["Detected field"];
+    if (field.sensitivity && field.sensitivity !== "normal") {
+      sourceParts.push(`sensitivity: ${field.sensitivity}`);
+    }
+    if (field.category && field.category !== "unknown") {
+      sourceParts.push(`category: ${field.category}`);
+    }
+    if (field.currentValue) {
+      sourceParts.push(`current: "${field.currentValue.slice(0, 30)}${field.currentValue.length > 30 ? "..." : ""}"`);
+    }
+    if (field.checked !== undefined) {
+      sourceParts.push(`checked: ${field.checked}`);
+    }
+    source.textContent = sourceParts.join(" · ");
 
     body.append(title, source);
     row.append(spacer, body);

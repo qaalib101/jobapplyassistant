@@ -1,4 +1,6 @@
 (() => {
+type FieldSensitivity = "normal" | "sensitive" | "manual-only";
+
 interface FillRequest {
   fieldId: string;
   value: string;
@@ -62,12 +64,46 @@ function fieldType(element: Element) {
   if (element instanceof HTMLTextAreaElement) return "textarea";
   if (element instanceof HTMLSelectElement) return "select";
   if (element instanceof HTMLInputElement) {
-    if (["email", "tel", "url", "number", "radio", "checkbox", "file"].includes(element.type)) {
+    if (["email", "tel", "url", "number", "radio", "checkbox", "file", "password"].includes(element.type)) {
       return element.type;
     }
     return "text";
   }
   return "unknown";
+}
+
+const MANUAL_ONLY_TOKENS = [
+  "ssn",
+  "social security",
+  "social security number",
+  "date of birth",
+  "dob",
+  "birth date",
+  "birthday",
+  "password",
+  "confirm password",
+  "password confirmation",
+];
+
+function normalizeForClassification(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function classifySensitivity(
+  label: string,
+  name: string | undefined,
+  id: string | undefined,
+  type: string,
+): FieldSensitivity {
+  if (type === "password") return "manual-only";
+
+  const searchText = normalizeForClassification([label, name, id].filter(Boolean).join(" "));
+
+  for (const token of MANUAL_ONLY_TOKENS) {
+    if (searchText.includes(token)) return "manual-only";
+  }
+
+  return "normal";
 }
 
 function fieldId(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
@@ -119,13 +155,27 @@ function fillSelectedFields(fields: FillRequest[]) {
       "input, textarea, select",
     ),
   );
-  const results: Array<{ fieldId: string; filled: boolean }> = [];
+  const results: Array<{ fieldId: string; filled: boolean; skipped?: string }> = [];
 
   for (const field of fields) {
     const element = elements.find((candidate) => fieldId(candidate) === field.fieldId);
+    if (!element) {
+      results.push({ fieldId: field.fieldId, filled: false });
+      continue;
+    }
+
+    const type = fieldType(element);
+    const label = labelFor(element);
+    const sensitivity = classifySensitivity(label, element.name || undefined, element.id || undefined, type);
+
+    if (sensitivity === "manual-only") {
+      results.push({ fieldId: field.fieldId, filled: false, skipped: "manual-only" });
+      continue;
+    }
+
     results.push({
       fieldId: field.fieldId,
-      filled: element ? fillElement(element, field.value) : false,
+      filled: fillElement(element, field.value),
     });
   }
 

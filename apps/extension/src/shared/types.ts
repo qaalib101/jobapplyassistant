@@ -3,6 +3,20 @@ export interface FieldOption {
   value: string;
 }
 
+export type FieldSensitivity = "normal" | "sensitive" | "manual-only";
+
+export type FieldCategory =
+  | "contact"
+  | "personal"
+  | "work"
+  | "demographic"
+  | "eeo"
+  | "disability"
+  | "veteran"
+  | "gender"
+  | "race"
+  | "unknown";
+
 export interface FieldMetadata {
   fieldId: string;
   label?: string;
@@ -14,6 +28,10 @@ export interface FieldMetadata {
   options?: FieldOption[] | null;
   domPathHash?: string;
   visible?: boolean;
+  currentValue?: string;
+  checked?: boolean;
+  sensitivity?: FieldSensitivity;
+  category?: FieldCategory;
 }
 
 export interface Suggestion {
