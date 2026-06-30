@@ -264,7 +264,7 @@ router.post("/resume-versions/tailor", async (req, res, next) => {
       take: 3,
       select: { content: true },
     });
-    const userContext = contextDocuments.map((row) => row.content).join("\n\n");
+    const userContext = contextDocuments.map((row: { content: string }) => row.content).join("\n\n");
     const provider = getProvider();
     const fallbackProvider = getProvider(config.aiFallbackProvider);
     const activeProvider = provider

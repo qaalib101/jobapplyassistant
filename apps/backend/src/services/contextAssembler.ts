@@ -49,14 +49,14 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
   ]);
 
   const uploadedContextChars = contextDocuments.reduce(
-    (total, row) => total + String(row.content ?? "").length,
+    (total: number, row: { content: string | null }) => total + String(row.content ?? "").length,
     0,
   );
 
   const context = [
     "UPLOADED APPLICATION ASSISTANT CONTEXT",
     contextDocuments
-      .map((row) => [`Title: ${row.title}`, String(row.content ?? "").slice(0, 14000)].join("\n"))
+      .map((row: { title: string; content: string | null }) => [`Title: ${row.title}`, String(row.content ?? "").slice(0, 14000)].join("\n"))
       .join("\n\n---\n\n") || "None",
     "",
     "STRUCTURED PROFILE DATA",
@@ -72,7 +72,7 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
     "",
     "RESUME VERSIONS",
     JSON.stringify(
-      resumes.map((row) => ({
+      resumes.map((row: { label: string; target_role: string | null; parsed_text: string | null }) => ({
         ...row,
         parsed_text: row.parsed_text?.slice(0, 6000),
       })),

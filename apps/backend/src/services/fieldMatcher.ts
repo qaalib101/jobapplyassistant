@@ -33,6 +33,7 @@ const sensitiveGeneratedSkip = [
   "birth date",
   "ssn",
   "social security",
+  "password",
 ];
 
 function fieldText(field: FieldMetadata) {
@@ -107,7 +108,12 @@ function answerScore(fieldTextValue: string, answer: {
   return overlap / Math.max(4, fieldTokens.size);
 }
 
-function shouldSkipField(text: string) {
+function shouldSkipField(field: FieldMetadata, text: string) {
+  // Use sensitivity classification from scanner if available
+  if (field.sensitivity === "manual-only" || field.sensitivity === "sensitive") {
+    return true;
+  }
+  // Fall back to text-based detection for backward compatibility
   return sensitiveGeneratedSkip.some((token) => text.includes(normalizeText(token)));
 }
 
@@ -135,7 +141,7 @@ export async function deterministicSuggestions(
   for (const field of fields) {
     const text = fieldText(field);
     if (!text || field.type === "file") continue;
-    if (shouldSkipField(text)) continue;
+    if (shouldSkipField(field, text)) continue;
 
     for (const mapping of profileFieldMap) {
       if (!mapping.tokens.some((token) => text.includes(normalizeText(token)))) continue;
@@ -191,9 +197,9 @@ export async function deterministicSuggestions(
     }
 
     const answerMatch = answerRows
-      .map((answer) => ({ answer, score: answerScore(text, answer) }))
-      .filter((item) => item.score >= 0.35)
-      .sort((left, right) => right.score - left.score)[0]?.answer;
+      .map((answer: { id: string; question_key: string | null; question_text: string; answer_text: string; tags: unknown }) => ({ answer, score: answerScore(text, answer) }))
+      .filter((item: { answer: { id: string; question_key: string | null; question_text: string; answer_text: string; tags: unknown }; score: number }) => item.score >= 0.35)
+      .sort((left: { score: number }, right: { score: number }) => right.score - left.score)[0]?.answer;
 
     if (answerMatch) {
       suggestions.push({

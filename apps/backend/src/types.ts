@@ -11,6 +11,20 @@ export type FieldType =
   | "file"
   | "unknown";
 
+export type FieldSensitivity = "normal" | "sensitive" | "manual-only";
+
+export type FieldCategory =
+  | "contact"
+  | "personal"
+  | "work"
+  | "demographic"
+  | "eeo"
+  | "disability"
+  | "veteran"
+  | "gender"
+  | "race"
+  | "unknown";
+
 export interface FieldOption {
   label: string;
   value: string;
@@ -27,6 +41,10 @@ export interface FieldMetadata {
   options?: FieldOption[] | null;
   domPathHash?: string;
   visible?: boolean;
+  currentValue?: string;
+  checked?: boolean;
+  sensitivity?: FieldSensitivity;
+  category?: FieldCategory;
 }
 
 export interface Suggestion {
