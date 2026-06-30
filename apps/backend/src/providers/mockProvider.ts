@@ -1,15 +1,14 @@
-import {
-  AIProvider,
-  BatchAnswerInput,
-  BatchAnswerResult,
-  DraftAnswerInput,
-  DraftAnswerResult,
-} from "../types";
+import { BatchAnswerInput, BatchAnswerResult, DraftAnswerInput, DraftAnswerResult } from "../types";
+import { BaseProvider } from "./baseProvider";
 
-export class MockProvider implements AIProvider {
+export class MockProvider extends BaseProvider {
   id = "mock";
   label = "Mock";
   mode = "local" as const;
+
+  constructor() {
+    super("mock", "Mock", "local");
+  }
 
   configured() {
     return true;
@@ -29,20 +28,22 @@ export class MockProvider implements AIProvider {
         jobDescriptionProvided: Boolean(input.jobDescription),
       },
       provider: this.id,
+      model: undefined
     };
   }
 
   async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {
-    return input.fields.map(({ field, question }) => ({
-      fieldId: field.fieldId,
-      text: `Draft answer for "${question}". Review and personalize before using.`,
+    return input.fields.map((field) => ({
+      fieldId: field.field.fieldId,
+      text: `Draft answer for "${field.question}". Review and personalize before using.`,
       confidence: 0.35,
       sourceContext: {
         contextUsed: "mock_batch",
-        fieldId: field.fieldId,
+        fieldId: field.field.fieldId,
         jobDescriptionProvided: Boolean(input.jobDescription),
       },
       provider: this.id,
+      model: undefined
     }));
   }
 
@@ -72,6 +73,7 @@ export class MockProvider implements AIProvider {
         provider: this.id,
       },
       provider: this.id,
+      model: undefined
     };
   }
 }
