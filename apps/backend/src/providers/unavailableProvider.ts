@@ -1,14 +1,12 @@
-import { AIProvider, BatchAnswerInput, DraftAnswerInput, DraftAnswerResult } from "../types";
+import { BatchAnswerInput, DraftAnswerInput, DraftAnswerResult } from "../types";
+import { BaseProvider } from "./baseProvider";
 
-export class UnavailableProvider implements AIProvider {
-  label: string;
-  mode = "disabled" as const;
+export class UnavailableProvider extends BaseProvider {
+  private reason: string;
 
-  constructor(
-    public id: string,
-    private reason: string,
-  ) {
-    this.label = `${id} unavailable`;
+  constructor(id: string, reason: string) {
+    super(id, `${id} unavailable`, "disabled");
+    this.reason = reason;
   }
 
   configured() {

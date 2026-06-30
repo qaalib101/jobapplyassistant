@@ -1,14 +1,7 @@
-import {
-  AIProvider,
-  BatchAnswerInput,
-  BatchAnswerResult,
-  DraftAnswerInput,
-  DraftAnswerResult,
-  FieldMetadata,
-} from "../types";
+import { BatchAnswerInput, BatchAnswerResult, DraftAnswerInput, DraftAnswerResult } from "../types";
 import { BaseProvider } from "./baseProvider";
 
-export class NoneProvider extends BaseProvider implements AIProvider {
+export class NoneProvider extends BaseProvider {
   id = "none";
   label = "None";
   mode = "disabled" as const;

@@ -1,11 +1,5 @@
 import { config } from "../config";
-import {
-  AIProvider,
-  BatchAnswerInput,
-  BatchAnswerResult,
-  DraftAnswerInput,
-  DraftAnswerResult,
-} from "../types";
+import { BatchAnswerInput, BatchAnswerResult, DraftAnswerResult } from "../types";
 import { extractJsonObject } from "./json";
 import { BaseProvider } from "./baseProvider";
 

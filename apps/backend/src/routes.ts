@@ -267,11 +267,11 @@ router.post("/resume-versions/tailor", async (req, res, next) => {
     const userContext = contextDocuments.map((row) => row.content).join("\n\n");
     const provider = getProvider();
     const fallbackProvider = getProvider(config.aiFallbackProvider);
-    const activeProvider =
-      provider.configured() && provider.id !== "none" && provider.tailorResume
-        ? provider
-        : fallbackProvider;
-    if (!activeProvider.tailorResume || activeProvider.id === "none") {
+    const activeProvider = provider
+      .configured() && provider.id !== "none"
+      ? provider
+      : fallbackProvider;
+    if (activeProvider.id === "none") {
       throw new Error("The active AI provider cannot tailor resumes.");
     }
 

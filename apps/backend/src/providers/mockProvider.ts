@@ -1,14 +1,7 @@
-import {
-  AIProvider,
-  BatchAnswerInput,
-  BatchAnswerResult,
-  DraftAnswerInput,
-  DraftAnswerResult,
-  FieldMetadata,
-} from "../types";
+import { BatchAnswerInput, BatchAnswerResult, DraftAnswerInput, DraftAnswerResult } from "../types";
 import { BaseProvider } from "./baseProvider";
 
-export class MockProvider extends BaseProvider implements AIProvider {
+export class MockProvider extends BaseProvider {
   id = "mock";
   label = "Mock";
   mode = "local" as const;

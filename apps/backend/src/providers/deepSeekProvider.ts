@@ -1,11 +1,5 @@
 import { config } from "../config";
-import {
-  AIProvider,
-  BatchAnswerInput,
-  BatchAnswerResult,
-  DraftAnswerInput,
-  DraftAnswerResult,
-} from "../types";
+import { BatchAnswerInput, BatchAnswerResult, DraftAnswerResult } from "../types";
 import { extractJsonObject } from "./json";
 import { BaseProvider } from "./baseProvider";
 
@@ -45,13 +39,14 @@ async function providerMessage(response: Response) {
   }
 }
 
-export class DeepSeekProvider implements AIProvider {
-  id = "deepseek";
-  label = "DeepSeek";
-  mode = "remote" as const;
+export class DeepSeekProvider extends BaseProvider {
   private baseUrl = config.deepseek.baseUrl.replace(/\/$/, "");
   private model = config.deepseek.model;
   private apiKey = config.deepseek.apiKey;
+
+  constructor() {
+    super("deepseek", "DeepSeek", "remote");
+  }
 
   configured() {
     return Boolean(this.apiKey);
@@ -118,23 +113,6 @@ export class DeepSeekProvider implements AIProvider {
     } finally {
       clearTimeout(timeout);
     }
-  }
-
-  async generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult> {
-    const batch = await this.generateAnswerDrafts({
-      fields: [{ field: input.field, question: input.question }],
-      context: input.context,
-      jobDescription: input.jobDescription,
-    });
-    const first = batch[0];
-    if (!first) throw new Error("DeepSeek did not return answer.");
-    return {
-      text: first.text,
-      confidence: first.confidence,
-      sourceContext: first.sourceContext,
-      provider: first.provider,
-      model: first.model,
-    };
   }
 
   async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {

@@ -88,7 +88,7 @@ export interface AIProvider {
   healthCheck(): Promise<boolean>;
   generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult>;
   generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]>;
-  tailorResume?(input: {
+  tailorResume(input: {
     resumeText: string;
     jobDescription: string;
     userContext: string;
