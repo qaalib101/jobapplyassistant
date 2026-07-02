@@ -1,5 +1,7 @@
 type FieldSensitivity = "normal" | "sensitive" | "manual-only";
 
+type ReviewStatus = "pending" | "accepted" | "edited" | "rejected" | "skipped" | "blocked";
+
 type FieldCategory =
   | "contact"
   | "personal"
@@ -41,6 +43,24 @@ interface Suggestion {
   model?: string;
   isGenerated: boolean;
   requiresUserReview: true;
+}
+
+interface SuggestionDecision {
+  fieldId: string;
+  fieldSuggestionId?: string;
+  reviewStatus: ReviewStatus;
+  editedValue?: string;
+  originalValue?: string;
+  provider?: string;
+  model?: string;
+  confidence?: number;
+  sourceType?: string;
+}
+
+interface BlockedFieldInfo {
+  fieldId: string;
+  fieldLabel?: string;
+  reason: string;
 }
 
 interface ScanResult {
@@ -515,7 +535,11 @@ async function scanPage() {
     pageSnapshotId = snapshot.id;
 
     setAnswerLoading(true, "Getting AI answers...");
-    const response = await api<{ suggestions: Suggestion[]; contextSummary?: ContextSummary }>(
+    const response = await api<{
+      suggestions: Suggestion[];
+      blockedFields?: BlockedFieldInfo[];
+      contextSummary?: ContextSummary;
+    }>(
       `/application-sessions/${activeSession.id}/suggestions`,
       {
         method: "POST",
@@ -530,12 +554,14 @@ async function scanPage() {
     setAnswerLoading(false);
     suggestions = response.suggestions;
     contextSummary = response.contextSummary;
+    const blockedCount = response.blockedFields?.length ?? 0;
     renderSession(activeSession);
     renderSuggestions();
+    const blockedMsg = blockedCount > 0 ? ` ${blockedCount} field(s) blocked (manual-only).` : "";
     setStatus(
       suggestions.length
-        ? "Review suggestions and select fields to fill."
-        : `Found ${scan.fields.length} fields, but no suggestions yet.`,
+        ? `Review suggestions and select fields to fill.${blockedMsg}`
+        : `Found ${scan.fields.length} fields, but no suggestions yet.${blockedMsg}`,
     );
   } catch (error) {
     setAnswerLoading(false);
@@ -576,6 +602,45 @@ async function fillSuggestions(fillAll = false) {
           fieldLabel: suggestion.fieldLabel,
           filledValue: reviewedValue(suggestion.fieldId),
         })),
+      }),
+    });
+
+    // Build and send decision records for audit trail
+    const decisions: SuggestionDecision[] = selectedSuggestions.map((suggestion) => {
+      const currentValue = reviewedValue(suggestion.fieldId);
+      const wasEdited = currentValue !== suggestion.suggestedValue;
+      return {
+        fieldId: suggestion.fieldId,
+        reviewStatus: wasEdited ? "edited" : "accepted",
+        originalValue: suggestion.suggestedValue,
+        editedValue: wasEdited ? currentValue : undefined,
+        provider: suggestion.provider,
+        model: suggestion.model,
+        confidence: suggestion.confidence,
+        sourceType: suggestion.sourceType,
+      };
+    });
+
+    // Also log skipped suggestions (unchecked)
+    const skippedSuggestions = suggestions.filter(
+      (s) => !selectedSuggestions.some((sel) => sel.fieldId === s.fieldId),
+    );
+    for (const skipped of skippedSuggestions) {
+      decisions.push({
+        fieldId: skipped.fieldId,
+        reviewStatus: "skipped",
+        provider: skipped.provider,
+        model: skipped.model,
+        confidence: skipped.confidence,
+        sourceType: skipped.sourceType,
+      });
+    }
+
+    await api(`/application-sessions/${activeSession.id}/suggestion-decisions`, {
+      method: "POST",
+      body: JSON.stringify({
+        pageSnapshotId,
+        decisions,
       }),
     });
 

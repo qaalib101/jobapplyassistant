@@ -144,6 +144,7 @@ model ApplicationSession {
   page_snapshots          ApplicationPageSnapshot[]
   field_suggestions       FieldSuggestion[]
   filled_field_logs       FilledFieldLog[]
+  suggestion_decision_logs SuggestionDecisionLog[]
 
   @@index([user_profile_id, status], map: "application_sessions_user_status_idx")
   @@index([ats_domain], map: "application_sessions_domain_idx")
@@ -162,8 +163,9 @@ model ApplicationPageSnapshot {
   created_at             DateTime @default(now()) @db.Timestamptz(6)
 
   application_session ApplicationSession @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
-  field_suggestions   FieldSuggestion[]
-  filled_field_logs   FilledFieldLog[]
+  field_suggestions        FieldSuggestion[]
+  filled_field_logs        FilledFieldLog[]
+  suggestion_decision_logs SuggestionDecisionLog[]
 
   @@index([application_session_id, created_at(sort: Desc)], map: "page_snapshots_session_idx")
   @@map("application_page_snapshots")
@@ -192,7 +194,8 @@ model FieldSuggestion {
 
   application_session ApplicationSession     @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
   page_snapshot       ApplicationPageSnapshot @relation(fields: [page_snapshot_id], references: [id], onDelete: Cascade)
-  filled_field_logs   FilledFieldLog[]
+  filled_field_logs        FilledFieldLog[]
+  suggestion_decision_logs SuggestionDecisionLog[]
 
   @@index([page_snapshot_id], map: "field_suggestions_snapshot_idx")
   @@map("field_suggestions")
@@ -232,6 +235,30 @@ model AIRequestLog {
   created_at             DateTime @default(now()) @db.Timestamptz(6)
 
   @@map("ai_request_logs")
+}
+
+model SuggestionDecisionLog {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  application_session_id String   @db.Uuid
+  page_snapshot_id       String   @db.Uuid
+  field_suggestion_id    String?  @db.Uuid
+  field_id               String
+  review_status          String
+  original_value_hash    String?
+  edited_value_hash      String?
+  provider               String?
+  model                  String?
+  confidence             Decimal? @db.Decimal
+  source_type            String?
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  application_session ApplicationSession      @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
+  page_snapshot       ApplicationPageSnapshot @relation(fields: [page_snapshot_id], references: [id], onDelete: Cascade)
+  field_suggestion    FieldSuggestion?        @relation(fields: [field_suggestion_id], references: [id], onDelete: SetNull)
+
+  @@index([application_session_id], map: "suggestion_decisions_session_idx")
+  @@index([page_snapshot_id], map: "suggestion_decisions_snapshot_idx")
+  @@map("suggestion_decision_logs")
 }
 
 model UserContextDocument {

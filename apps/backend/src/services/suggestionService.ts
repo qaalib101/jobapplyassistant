@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { getFallbackProvider, getProvider } from "../providers";
-import { FieldMetadata, Suggestion } from "../types";
+import { FieldMetadata, Suggestion, SuggestionResult } from "../types";
 import { assembleUserContext } from "./contextAssembler";
 import { deterministicSuggestions } from "./fieldMatcher";
+import { logBlockedFields } from "./auditService";
 
 function shouldGenerate(field: FieldMetadata, existing: Suggestion[]) {
   if (existing.some((suggestion) => suggestion.fieldId === field.fieldId)) return false;
@@ -24,8 +25,11 @@ export async function createSuggestions(input: {
   userProfileId: string;
   fields: FieldMetadata[];
   jobDescription?: string;
-}) {
-  const deterministic = await deterministicSuggestions(input.userProfileId, input.fields);
+}): Promise<SuggestionResult> {
+  const { suggestions: deterministic, blockedFields } = await deterministicSuggestions(
+    input.userProfileId,
+    input.fields,
+  );
   const suggestions = [...deterministic];
   const provider = getProvider();
   const assembledContext = await assembleUserContext(input.userProfileId);
@@ -36,6 +40,7 @@ export async function createSuggestions(input: {
       question: field.label || field.placeholder || field.name || "Application question",
     }));
 
+  // Log AI request metadata
   if (provider.id !== "none" && fieldsNeedingAi.length > 0) {
     try {
       const drafts = await provider.generateAnswerDrafts({
@@ -63,36 +68,112 @@ export async function createSuggestions(input: {
           requiresUserReview: true,
         });
       }
+
+      // Log successful AI request
+      await prisma.aIRequestLog.create({
+        data: {
+          application_session_id: input.applicationSessionId,
+          provider: provider.id,
+          model: undefined,
+          purpose: "suggestion_generation",
+          input_summary: {
+            fieldCount: fieldsNeedingAi.length,
+            contextLength: assembledContext.text.length,
+            jobDescriptionProvided: Boolean(input.jobDescription),
+          },
+          output_summary: {
+            draftCount: drafts.length,
+            provider: provider.id,
+          },
+          success: true,
+        },
+      });
     } catch (error) {
+      // Log failed AI request
+      await prisma.aIRequestLog.create({
+        data: {
+          application_session_id: input.applicationSessionId,
+          provider: provider.id,
+          model: undefined,
+          purpose: "suggestion_generation",
+          input_summary: {
+            fieldCount: fieldsNeedingAi.length,
+            contextLength: assembledContext.text.length,
+            jobDescriptionProvided: Boolean(input.jobDescription),
+          },
+          output_summary: {},
+          success: false,
+          error_message: error instanceof Error ? error.message : "unknown error",
+        },
+      });
+
       const fallback = getFallbackProvider();
       if (fallback.id !== provider.id && fallback.id !== "none") {
-        const drafts = await fallback.generateAnswerDrafts({
-          fields: fieldsNeedingAi,
-          context: assembledContext.text,
-          jobDescription: input.jobDescription,
-        });
-        const fieldById = new Map(fieldsNeedingAi.map(({ field }) => [field.fieldId, field]));
-        for (const draft of drafts) {
-          const field = fieldById.get(draft.fieldId);
-          if (!field) continue;
-          suggestions.push({
-            fieldId: field.fieldId,
-            fieldLabel: field.label,
-            fieldType: field.type,
-            suggestedValue: draft.text,
-            confidence: draft.confidence,
-            sourceType: "GeneratedDraft",
-            sourceIds: [],
-            sourceContext: {
-              ...draft.sourceContext,
-              fallbackFrom: provider.id,
-              fallbackReason: error instanceof Error ? error.message : "unknown error",
+        try {
+          const drafts = await fallback.generateAnswerDrafts({
+            fields: fieldsNeedingAi,
+            context: assembledContext.text,
+            jobDescription: input.jobDescription,
+          });
+          const fieldById = new Map(fieldsNeedingAi.map(({ field }) => [field.fieldId, field]));
+          for (const draft of drafts) {
+            const field = fieldById.get(draft.fieldId);
+            if (!field) continue;
+            suggestions.push({
+              fieldId: field.fieldId,
+              fieldLabel: field.label,
+              fieldType: field.type,
+              suggestedValue: draft.text,
+              confidence: draft.confidence,
+              sourceType: "GeneratedDraft",
+              sourceIds: [],
+              sourceContext: {
+                ...draft.sourceContext,
+                fallbackFrom: provider.id,
+                fallbackReason: error instanceof Error ? error.message : "unknown error",
+              },
+              provider: draft.provider,
+              model: draft.model,
+              promptVersion: "mvp-001",
+              isGenerated: true,
+              requiresUserReview: true,
+            });
+          }
+
+          // Log successful fallback request
+          await prisma.aIRequestLog.create({
+            data: {
+              application_session_id: input.applicationSessionId,
+              provider: fallback.id,
+              model: undefined,
+              purpose: "suggestion_generation_fallback",
+              input_summary: {
+                fieldCount: fieldsNeedingAi.length,
+                fallbackFrom: provider.id,
+              },
+              output_summary: {
+                draftCount: drafts.length,
+                provider: fallback.id,
+              },
+              success: true,
             },
-            provider: draft.provider,
-            model: draft.model,
-            promptVersion: "mvp-001",
-            isGenerated: true,
-            requiresUserReview: true,
+          });
+        } catch (fallbackError) {
+          await prisma.aIRequestLog.create({
+            data: {
+              application_session_id: input.applicationSessionId,
+              provider: fallback.id,
+              model: undefined,
+              purpose: "suggestion_generation_fallback",
+              input_summary: {
+                fieldCount: fieldsNeedingAi.length,
+                fallbackFrom: provider.id,
+              },
+              output_summary: {},
+              success: false,
+              error_message:
+                fallbackError instanceof Error ? fallbackError.message : "unknown error",
+            },
           });
         }
       }
@@ -121,8 +202,18 @@ export async function createSuggestions(input: {
     });
   }
 
+  // Log blocked fields in audit trail (no sensitive values stored)
+  if (blockedFields.length > 0) {
+    await logBlockedFields({
+      applicationSessionId: input.applicationSessionId,
+      pageSnapshotId: input.pageSnapshotId,
+      blockedFields,
+    });
+  }
+
   return {
     suggestions,
+    blockedFields,
     contextSummary: assembledContext.summary,
   };
 }

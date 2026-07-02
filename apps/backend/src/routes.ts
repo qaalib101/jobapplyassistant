@@ -7,6 +7,7 @@ import { listProviders, getProvider } from "./providers";
 import { createSuggestions } from "./services/suggestionService";
 import { syncProfileFromContext } from "./services/profileContextSync";
 import { canonicalizeUrl, hashValue, hostname, redactValue } from "./utils/text";
+import { logSuggestionDecisions, getAuditTrail } from "./services/auditService";
 
 const router = express.Router();
 
@@ -468,6 +469,54 @@ router.post("/application-sessions/:id/filled-fields", async (req, res, next) =>
       inserted.push(log);
     }
     res.status(201).json({ filledFields: inserted });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/application-sessions/:id/suggestion-decisions", async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        pageSnapshotId: z.string(),
+        decisions: z.array(
+          z.object({
+            fieldId: z.string(),
+            fieldSuggestionId: z.string().optional(),
+            reviewStatus: z.enum([
+              "pending",
+              "accepted",
+              "edited",
+              "rejected",
+              "skipped",
+              "blocked",
+            ]),
+            editedValue: z.string().optional(),
+            originalValue: z.string().optional(),
+            provider: z.string().optional(),
+            model: z.string().optional(),
+            confidence: z.number().optional(),
+            sourceType: z.string().optional(),
+          }),
+        ),
+      })
+      .parse(req.body);
+
+    const created = await logSuggestionDecisions({
+      applicationSessionId: req.params.id,
+      pageSnapshotId: body.pageSnapshotId,
+      decisions: body.decisions,
+    });
+    res.status(201).json({ decisions: created });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/application-sessions/:id/audit-trail", async (req, res, next) => {
+  try {
+    const trail = await getAuditTrail(req.params.id);
+    res.json({ auditTrail: trail });
   } catch (error) {
     next(error);
   }

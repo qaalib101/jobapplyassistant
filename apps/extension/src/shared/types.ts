@@ -34,6 +34,14 @@ export interface FieldMetadata {
   category?: FieldCategory;
 }
 
+export type ReviewStatus =
+  | "pending"
+  | "accepted"
+  | "edited"
+  | "rejected"
+  | "skipped"
+  | "blocked";
+
 export interface Suggestion {
   fieldId: string;
   fieldLabel?: string;
@@ -46,4 +54,22 @@ export interface Suggestion {
   model?: string;
   isGenerated: boolean;
   requiresUserReview: true;
+}
+
+export interface SuggestionDecision {
+  fieldId: string;
+  fieldSuggestionId?: string;
+  reviewStatus: ReviewStatus;
+  editedValue?: string;
+  originalValue?: string;
+  provider?: string;
+  model?: string;
+  confidence?: number;
+  sourceType?: string;
+}
+
+export interface BlockedFieldInfo {
+  fieldId: string;
+  fieldLabel?: string;
+  reason: string;
 }

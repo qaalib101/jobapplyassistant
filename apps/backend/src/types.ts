@@ -98,6 +98,44 @@ export interface BatchAnswerResult {
   model?: string;
 }
 
+export type ReviewStatus =
+  | "pending"
+  | "accepted"
+  | "edited"
+  | "rejected"
+  | "skipped"
+  | "blocked";
+
+export interface SuggestionDecision {
+  fieldId: string;
+  fieldSuggestionId?: string;
+  reviewStatus: ReviewStatus;
+  editedValue?: string;
+  originalValue?: string;
+  provider?: string;
+  model?: string;
+  confidence?: number;
+  sourceType?: string;
+}
+
+export interface BlockedFieldInfo {
+  fieldId: string;
+  fieldLabel?: string;
+  reason: string;
+}
+
+export interface SuggestionResult {
+  suggestions: Suggestion[];
+  blockedFields: BlockedFieldInfo[];
+  contextSummary: {
+    profilePresent: boolean;
+    answerCount: number;
+    resumeCount: number;
+    uploadedContextCount: number;
+    uploadedContextChars: number;
+  };
+}
+
 export interface AIProvider {
   id: string;
   label: string;

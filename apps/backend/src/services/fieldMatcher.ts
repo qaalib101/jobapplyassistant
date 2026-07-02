@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma";
-import { FieldMetadata, Suggestion } from "../types";
+import { BlockedFieldInfo, FieldMetadata, Suggestion } from "../types";
 import { normalizeText } from "../utils/text";
 
 const profileFieldMap: Array<{
@@ -120,7 +120,7 @@ function shouldSkipField(field: FieldMetadata, text: string) {
 export async function deterministicSuggestions(
   userProfileId: string,
   fields: FieldMetadata[],
-): Promise<Suggestion[]> {
+): Promise<{ suggestions: Suggestion[]; blockedFields: BlockedFieldInfo[] }> {
   const profile = ((await prisma.userProfile.findUnique({
     where: { id: userProfileId },
   })) ?? {}) as Record<string, unknown>;
@@ -137,11 +137,23 @@ export async function deterministicSuggestions(
   });
 
   const suggestions: Suggestion[] = [];
+  const blockedFields: BlockedFieldInfo[] = [];
 
   for (const field of fields) {
     const text = fieldText(field);
     if (!text || field.type === "file") continue;
-    if (shouldSkipField(field, text)) continue;
+    if (shouldSkipField(field, text)) {
+      blockedFields.push({
+        fieldId: field.fieldId,
+        fieldLabel: field.label,
+        reason: field.sensitivity === "manual-only"
+          ? "manual-only"
+          : field.sensitivity === "sensitive"
+            ? "sensitive"
+            : "sensitive-pattern",
+      });
+      continue;
+    }
 
     for (const mapping of profileFieldMap) {
       if (!mapping.tokens.some((token) => text.includes(normalizeText(token)))) continue;
@@ -220,5 +232,5 @@ export async function deterministicSuggestions(
     }
   }
 
-  return suggestions;
+  return { suggestions, blockedFields };
 }
