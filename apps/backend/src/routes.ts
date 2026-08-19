@@ -8,6 +8,8 @@ import { createSuggestions } from "./services/suggestionService";
 import { syncProfileFromContext } from "./services/profileContextSync";
 import { canonicalizeUrl, hashValue, hostname, redactValue } from "./utils/text";
 import { logSuggestionDecisions, getAuditTrail } from "./services/auditService";
+import logger from "./logger";
+import { DatabaseError, ValidationError, AIProviderError } from "./errors";
 
 const router = express.Router();
 
@@ -37,16 +39,57 @@ const fieldSchema = z.object({
 });
 
 async function getOrCreateDefaultProfile() {
-  const existing = await prisma.userProfile.findFirst({
-    orderBy: { created_at: "asc" },
-  });
-  if (existing) return existing;
+  try {
+    const existing = await prisma.userProfile.findFirst({
+      orderBy: { created_at: "asc" },
+    });
+    if (existing) return existing;
 
-  return prisma.userProfile.create({ data: {} });
+    return await prisma.userProfile.create({ data: {} });
+  } catch (error) {
+    // Log the full error details for debugging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    logger.error(`Database operation failed in getOrCreateDefaultProfile: ${errorMessage}`, {
+      component: 'prisma',
+      operation: 'getOrCreateDefaultProfile',
+      errorType: error instanceof Error ? error.constructor.name : 'unknown',
+      stack: errorStack,
+    });
+    throw new DatabaseError(`Failed to access user profile: ${errorMessage}`, error);
+  }
 }
 
-router.get("/health", (_req, res) => {
-  res.json({ ok: true });
+router.get("/health", async (_req, res) => {
+  const health: {
+    ok: boolean;
+    status: string;
+    database: { connected: boolean; latencyMs?: number; error?: string };
+    timestamp: string;
+  } = {
+    ok: true,
+    status: "healthy",
+    database: { connected: false },
+    timestamp: new Date().toISOString(),
+  };
+
+  // Check database connectivity
+  const dbStart = Date.now();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    health.database.connected = true;
+    health.database.latencyMs = Date.now() - dbStart;
+  } catch (error) {
+    health.ok = false;
+    health.status = "degraded";
+    health.database.error = error instanceof Error ? error.message : "Unknown database error";
+    logger.error("Health check: database connection failed", {
+      error: health.database.error,
+    });
+  }
+
+  const statusCode = health.ok ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 router.get("/profile", async (_req, res, next) => {
@@ -256,7 +299,7 @@ router.post("/resume-versions/tailor", async (req, res, next) => {
       resumeText = resume?.parsed_text ?? undefined;
     }
     if (!resumeText) {
-      throw new Error("Provide resumeText or resumeVersionId.");
+      throw new ValidationError("Provide resumeText or resumeVersionId.");
     }
 
     const contextDocuments = await prisma.userContextDocument.findMany({
@@ -273,7 +316,7 @@ router.post("/resume-versions/tailor", async (req, res, next) => {
       ? provider
       : fallbackProvider;
     if (activeProvider.id === "none") {
-      throw new Error("The active AI provider cannot tailor resumes.");
+      throw new AIProviderError("The active AI provider cannot tailor resumes. Please configure an AI provider.");
     }
 
     const draft = await activeProvider.tailorResume({

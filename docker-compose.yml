@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: jobapply
       POSTGRES_PASSWORD: jobapply_dev
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - jobapply_postgres:/var/lib/postgresql/data
     healthcheck:
@@ -18,17 +18,19 @@ services:
   backend:
     image: node:22-alpine
     working_dir: /app
-    env_file:
-      - .env
+    # NOTE: Do NOT use env_file here — the .env file contains localhost URLs
+    # intended for local (non-Docker) development. The environment block below
+    # provides all required variables with Docker-internal hostnames.
     environment:
       PORT: 4317
       DATABASE_URL: postgres://jobapply:jobapply_dev@postgres:5432/jobapplyassistant
       PUBLIC_BASE_URL: http://jobapply.localhost:8080
+      SKIP_DOTENV: "true"
     command: >
       sh -c "npm ci &&
       npx prisma generate &&
       npm run build:frontend &&
-      npm run db:migrate &&
+      npx prisma migrate deploy &&
       npx tsx apps/backend/src/server.ts"
     ports:
       - "4317:4317"
