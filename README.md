@@ -11,7 +11,7 @@ The goal is to help applicants move through multi-page ATS forms without buildin
 - Supports multi-page application sessions with page snapshots and filled-field logs.
 - Shows confidence and source context for suggestions.
 - Requires user review before filling anything.
-- Fills only user-selected fields.
+- Offers **Fill selected** and an explicit **Fill all reviewed** action; the latter includes every suggestion, regardless of checkbox selection.
 - Supports DeepSeek as the intended remote AI provider, with optional OpenAI, Ollama, mock, and no-AI modes.
 - Includes a lightweight local UI for pasting general AI context about yourself.
 - Provides a collapsible browser extension side panel.
@@ -33,7 +33,8 @@ This project intentionally does not:
 - TypeScript
 - Node.js
 - Express
-- PostgreSQL
+- PostgreSQL and Prisma
+- React, Vite, and Tailwind CSS
 - Docker Compose
 - Chrome Manifest V3 extension
 - DeepSeek/OpenAI-compatible provider interface
@@ -44,7 +45,6 @@ This project intentionally does not:
 ```text
 apps/
   backend/
-    db/migrations/        Postgres schema migrations
     src/                  API, providers, services
   frontend/
     public/               Static demo application forms
@@ -52,63 +52,89 @@ apps/
   extension/
     public/               MV3 manifest and side panel HTML/CSS
     src/                  background, content scripts, side panel controller
+prisma/
+  schema.prisma           Database models
+  migrations/             Postgres migrations
 scripts/
   copy-extension-assets.mjs
 ```
 
 ## Setup
 
-Install dependencies:
+Prerequisites:
+
+- Node.js 22.12+ on the Node 22 line, or a newer compatible LTS release (the current Vite version requires Node 20.19+ or 22.12+).
+- npm, Docker with Compose, and Chrome/Chromium with side-panel support.
+- Free host ports `5432`, `4317`, and `8080`; Vite development also uses `4318`.
+
+Run commands from the repository root. For a new checkout:
 
 ```bash
-npm install
-```
-
-Create local environment config:
-
-```bash
+npm ci
 cp .env.example .env
 ```
 
-The default local Postgres port is `5433` so it does not conflict with other projects using `5432`. The browser-facing local URL goes through Caddy at `http://jobapply.localhost:8080`.
+Keep your existing `.env` when updating an installation.
 
-Start the local stack:
+### Docker stack
 
 ```bash
 docker compose up -d
+docker compose logs -f backend
 ```
 
-This starts Postgres, the backend API, the React frontend build, and Caddy. The backend container builds the frontend and runs migrations on startup.
+Compose starts PostgreSQL, the backend, and Caddy. The backend installs dependencies, generates Prisma Client, builds the React frontend, and applies committed migrations before starting. The first startup can take time. The browser extension is built separately on the host.
 
-To run migrations manually during local development:
+Open `http://jobapply.localhost:8080`. The backend is also reachable at `http://localhost:4317`.
 
-```bash
-npm run db:migrate
+**Database port:** Compose currently publishes PostgreSQL on host port `5432`, while `.env.example` uses `5433`. The container connects directly to `postgres:5432`, so the Docker stack works independently of that example URL. Before running Prisma commands or a backend on the host, change `.env` to:
+
+```env
+DATABASE_URL=postgres://jobapply:jobapply_dev@localhost:5432/jobapplyassistant
 ```
 
-To run the backend outside Docker instead:
+Alternatively, change the Compose host mapping to `5433:5432` and retain the example URL. Other local projects, including Interview OS, may already occupy `5432`.
+
+**AI configuration in Docker:** the backend sets `SKIP_DOTENV=true` and its Compose environment currently does not forward AI settings from `.env`. Without explicit provider variables, suggestion generation falls back to mock drafts. To use a real provider, add its configuration to the backend service's `environment` using environment-variable interpolation, then recreate the backend. For example, forward `AI_PROVIDER`, `DEEPSEEK_API_KEY`, and `DEEPSEEK_MODEL` for DeepSeek. Keep credentials in local environment configuration rather than literal values in Compose.
+
+### Host development
+
+Start only PostgreSQL, using the matching host `DATABASE_URL` described above:
 
 ```bash
-docker compose up -d postgres caddy
+docker compose up -d postgres
+npm run prisma:generate
+npm run db:deploy
 npm run build:frontend
 npm run dev:backend
 ```
 
-For frontend-only development with Vite:
+Open `http://localhost:4317` for the built companion UI and `/demos/` for the demo forms. In a second terminal, optionally run:
 
 ```bash
 npm run dev:frontend
 ```
 
-The Vite dev server runs on `http://localhost:4318` and proxies `/api` to the backend on `http://localhost:4317`.
+Vite serves `http://localhost:4318` and proxies `/api` to `http://localhost:4317`.
 
-The API and context UI run at:
+The checked-in Caddy service targets the **container** backend, so it is not a proxy for a host development process. To use the extension with a host backend, set its local `backendBaseUrl` to `http://localhost:4317` from the extension side-panel DevTools console:
 
-```text
-http://jobapply.localhost:8080
+```javascript
+chrome.storage.local.set({ backendBaseUrl: "http://localhost:4317" });
 ```
 
-The raw backend is also exposed on `http://localhost:4317`; Caddy proxies browser traffic to the backend container.
+Remove that override to return to the Docker/Caddy default:
+
+```javascript
+chrome.storage.local.remove("backendBaseUrl");
+```
+
+### Database commands
+
+- `npm run db:deploy`: apply committed migrations to the configured database.
+- `npm run db:migrate`: create/apply migrations while developing schema changes.
+- `npm run db:status`: inspect migration status.
+- `npm run db:reset`: **destructively reset** the configured database; do not use it on personal data you want to keep.
 
 ## Companion UI
 
@@ -117,6 +143,8 @@ Open:
 ```text
 http://jobapply.localhost:8080/
 ```
+
+For host development, use `http://localhost:4317/` instead.
 
 The companion UI is a lightweight React SPA built with Vite and Tailwind CSS. Use it to review data sources, paste a broad context document, and save resume text.
 
@@ -131,7 +159,7 @@ The context document can include:
 - achievements
 - reusable application answers
 
-This is stored locally in Postgres, syncs basic profile fields, and is included when the backend drafts answers for uncommon application questions.
+This is stored in Postgres, syncs basic profile fields, and is included when the backend drafts answers for uncommon application questions. Remote providers receive assembled user context and scanned page text; local storage does not mean that remote AI processing stays on the machine.
 
 ## Demo Forms
 
@@ -153,15 +181,15 @@ Use these pages to demonstrate the extension flow without submitting anything to
 2. Open the extension side panel.
 3. Click **Scan page**.
 4. Upload, paste, or edit resume text in the side panel.
-5. Click **Tailor from scanned JD** to create a reviewed resume draft.
+5. Optionally click **Tailor from scanned JD** to generate a resume draft, then review it. Save context/resume changes and scan again to regenerate field suggestions.
 6. Review and edit field suggestions.
 7. Click **Fill all reviewed** or select fields and click **Fill selected**.
 
-The extension locks fill actions to the tab that was scanned. If you click another tab after scanning, filling still targets the scanned application page.
+After a successful scan, filling targets the scanned tab rather than whichever tab is currently active. Rescan after navigation or a failed scan, and verify the actual form values after filling. The current implementation does not use the filler's per-field result to determine which fields to log as filled.
 
 ## AI Providers
 
-Configure providers in `.env`.
+Configure providers in `.env` when running the backend on the host. For Docker, explicitly forward the selected provider variables as described above. Restart the backend after configuration changes.
 
 For DeepSeek:
 
@@ -169,7 +197,7 @@ For DeepSeek:
 AI_PROVIDER=deepseek
 AI_FALLBACK_PROVIDER=mock
 DEEPSEEK_API_KEY=your_key_here
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 For OpenAI:
@@ -194,7 +222,9 @@ For no AI generation:
 AI_PROVIDER=none
 ```
 
-Saved-answer and profile matching still work when AI is disabled.
+Saved-answer and profile matching still work when `AI_PROVIDER=none`. Resume tailoring selects a fallback when the primary provider is disabled or unconfigured; set `AI_FALLBACK_PROVIDER=none` as well if tailoring should also be unavailable.
+
+`AI_TIMEOUT_MS` controls generation timeouts (default `20000`), and `AI_MAX_CONTEXT_CHARS` caps assembled suggestion context (default `30000`). Mock mode returns placeholder drafts, not model-generated answers. For Ollama running on the host while the backend runs in Docker Desktop, use a container-reachable address such as `http://host.docker.internal:11434`.
 
 ## Build
 
@@ -213,6 +243,22 @@ The companion frontend build is written to:
 ```text
 dist/apps/frontend
 ```
+
+## Verification
+
+The root package does not declare npm workspaces. Install the per-app test dependencies separately:
+
+```bash
+npm --prefix apps/backend ci
+npm --prefix apps/extension ci
+npm --prefix apps/frontend ci
+npm run typecheck
+npm test
+```
+
+Individual suites are available through `npm run test:backend`, `npm run test:extension`, and `npm run test:frontend`. Run their corresponding `:watch` scripts in separate terminals; the root watch command chains persistent watchers sequentially.
+
+Current test limitations: the audit-service test for hashed decision records has a stale expectation for Prisma's relation-write shape and fails. Scanner/filler tests copy classification logic instead of exercising the actual content scripts; the frontend test is a placeholder. The suite does not establish end-to-end ATS compatibility.
 
 ## Load The Extension Locally
 
@@ -244,10 +290,13 @@ POST /api/resume-versions
 POST /api/resume-versions/tailor
 GET /api/answer-bank
 POST /api/answer-bank
+GET /api/application-sessions
 POST /api/application-sessions/resolve
 POST /api/application-sessions/:id/page-snapshots
 POST /api/application-sessions/:id/suggestions
 POST /api/application-sessions/:id/filled-fields
+POST /api/application-sessions/:id/suggestion-decisions
+GET /api/application-sessions/:id/audit-trail
 GET /api/ai/providers
 POST /api/ai/providers/test
 ```
@@ -269,6 +318,7 @@ Implemented:
 - User-reviewed suggestion UI
 - User-selected field filling
 - Multi-page session and page snapshot persistence
+- Suggestion decision audit records and an audit-trail API
 
 Next useful improvements:
 
@@ -277,3 +327,21 @@ Next useful improvements:
 - tests with fixture application pages
 - provider settings UI
 - answer-bank management UI
+
+## Reading the Code
+
+- [`suggestionService.ts`](apps/backend/src/services/suggestionService.ts): deterministic suggestions, batched AI fallback, and persistence.
+- [`contextAssembler.ts`](apps/backend/src/services/contextAssembler.ts): parallel context reads and context-size limits.
+- [`providers/`](apps/backend/src/providers): provider implementations, timeouts, and response handling.
+- [`scanner.ts`](apps/extension/src/content/scanner.ts) and [`filler.ts`](apps/extension/src/content/filler.ts): content-script scanning and filling.
+- [`sidepanel.ts`](apps/extension/src/ui/sidepanel.ts): scan, review, fill, and resume workflows.
+- [`schema.prisma`](prisma/schema.prisma): profiles, sessions, snapshots, suggestions, and audit records.
+
+## Current Limitations
+
+- The companion API is unauthenticated and intended for trusted local use, not public hosting.
+- Session resolution can group distinct jobs on the same ATS domain into one active session.
+- Scanner/filler label heuristics differ, so some detected fields cannot be filled. Audit entries currently record requested fills without checking actual field results.
+- Sensitive-field handling is incomplete across the scanner/API boundary; password fields are not accepted by the API field schema. Review the page and avoid relying on the extension for sensitive fields.
+- Model JSON is parsed without complete runtime validation of answer shapes. Generated suggestions always need review.
+- Resume uploads support text and Markdown only, not PDF or Word parsing.
