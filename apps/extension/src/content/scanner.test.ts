@@ -21,10 +21,6 @@ const MANUAL_ONLY_TOKENS = [
   "ssn",
   "social security",
   "social security number",
-  "date of birth",
-  "dob",
-  "birth date",
-  "birthday",
   "password",
   "confirm password",
   "password confirmation",
@@ -44,6 +40,10 @@ const SENSITIVE_TOKENS = [
   "veteran",
   "veteran status",
   "military status",
+  "date of birth",
+  "dob",
+  "birth date",
+  "birthday",
 ];
 
 const CATEGORY_RULES: Array<{ tokens: string[]; category: FieldCategory }> = [
@@ -123,17 +123,17 @@ describe('classifySensitivity', () => {
       expect(classifySensitivity('Social Security Number', 'social_security', 'ssn', 'text')).toBe('manual-only');
     });
 
-    it('should classify date of birth fields as manual-only', () => {
-      expect(classifySensitivity('Date of Birth', 'dob', 'birth_date', 'text')).toBe('manual-only');
-      expect(classifySensitivity('Birthday', 'birthday', 'birthday', 'date')).toBe('manual-only');
-    });
-
     it('should classify confirm password as manual-only', () => {
       expect(classifySensitivity('Confirm Password', 'confirm_password', 'confirm_password', 'password')).toBe('manual-only');
     });
   });
 
   describe('sensitive fields', () => {
+    it('should classify date of birth fields as sensitive', () => {
+      expect(classifySensitivity('Date of Birth', 'dob', 'birth_date', 'text')).toBe('sensitive');
+      expect(classifySensitivity('Birthday', 'birthday', 'birthday', 'date')).toBe('sensitive');
+    });
+
     it('should classify gender fields as sensitive', () => {
       expect(classifySensitivity('Gender', 'gender', 'gender', 'select')).toBe('sensitive');
       expect(classifySensitivity('Sex', 'sex', 'sex', 'radio')).toBe('sensitive');
