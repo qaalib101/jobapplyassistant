@@ -1,6 +1,7 @@
 import { prisma } from "../db/prisma";
 import { BlockedFieldInfo, FieldMetadata, Suggestion } from "../types";
 import { normalizeText } from "../utils/text";
+import { effectiveSensitivity } from "./fieldPolicy";
 
 const profileFieldMap: Array<{
   tokens: string[];
@@ -12,7 +13,7 @@ const profileFieldMap: Array<{
   { tokens: ["full name", "legal name", "name"], column: "full_name", label: "full name" },
   { tokens: ["email", "e mail"], column: "email", label: "email" },
   { tokens: ["phone", "mobile", "telephone"], column: "phone", label: "phone" },
-  { tokens: ["location", "city", "address"], column: "location", label: "location" },
+  { tokens: ["current location", "location"], column: "location", label: "location" },
   { tokens: ["linkedin"], column: "linkedin_url", label: "LinkedIn" },
   { tokens: ["github"], column: "github_url", label: "GitHub" },
   { tokens: ["portfolio", "website"], column: "portfolio_url", label: "portfolio" },
@@ -21,19 +22,11 @@ const profileFieldMap: Array<{
     column: "work_authorization",
     label: "work authorization",
   },
-];
-
-const sensitiveGeneratedSkip = [
-  "gender",
-  "race",
-  "ethnicity",
-  "disability",
-  "veteran",
-  "date of birth",
-  "birth date",
-  "ssn",
-  "social security",
-  "password",
+  { tokens: ["date of birth", "dob", "birth date", "birthday"], column: "date_of_birth", label: "date of birth" },
+  { tokens: ["gender", "sex"], column: "gender", label: "gender" },
+  { tokens: ["race", "ethnicity", "ethnic origin"], column: "race_ethnicity", label: "race / ethnicity" },
+  { tokens: ["disability", "disabled"], column: "disability_status", label: "disability status" },
+  { tokens: ["veteran", "military status"], column: "veteran_status", label: "veteran status" },
 ];
 
 function fieldText(field: FieldMetadata) {
@@ -51,12 +44,14 @@ function splitName(value: string, part: "first" | "last") {
 function optionValue(field: FieldMetadata, suggestedValue: string): string {
   if (!field.options?.length) return suggestedValue;
   const normalizedSuggestion = normalizeText(suggestedValue);
+  const booleanSuggestion = yesNoToken(suggestedValue);
   const match = field.options.find(
     (option) =>
       normalizeText(option.label) === normalizedSuggestion ||
       normalizeText(option.value) === normalizedSuggestion ||
-      yesNoToken(option.label) === yesNoToken(suggestedValue) ||
-      yesNoToken(option.value) === yesNoToken(suggestedValue),
+      (booleanSuggestion !== null &&
+        (yesNoToken(option.label) === booleanSuggestion ||
+          yesNoToken(option.value) === booleanSuggestion)),
   );
   return match?.value ?? suggestedValue;
 }
@@ -83,7 +78,8 @@ function isPlaceholderProfileValue(value: string) {
 }
 
 function fieldHasAny(text: string, tokens: string[]) {
-  return tokens.some((token) => text.includes(normalizeText(token)));
+  const padded = ` ${text} `;
+  return tokens.some((token) => padded.includes(` ${normalizeText(token)} `));
 }
 
 function answerScore(fieldTextValue: string, answer: {
@@ -106,15 +102,6 @@ function answerScore(fieldTextValue: string, answer: {
   const answerTokens = new Set(searchText.split(" ").filter((token) => token.length > 2));
   const overlap = Array.from(fieldTokens).filter((token) => answerTokens.has(token)).length;
   return overlap / Math.max(4, fieldTokens.size);
-}
-
-function shouldSkipField(field: FieldMetadata, text: string) {
-  // Use sensitivity classification from scanner if available
-  if (field.sensitivity === "manual-only" || field.sensitivity === "sensitive") {
-    return true;
-  }
-  // Fall back to text-based detection for backward compatibility
-  return sensitiveGeneratedSkip.some((token) => text.includes(normalizeText(token)));
 }
 
 export async function deterministicSuggestions(
@@ -142,21 +129,18 @@ export async function deterministicSuggestions(
   for (const field of fields) {
     const text = fieldText(field);
     if (!text || field.type === "file") continue;
-    if (shouldSkipField(field, text)) {
+    const sensitivity = effectiveSensitivity(field);
+    if (sensitivity === "manual-only") {
       blockedFields.push({
         fieldId: field.fieldId,
         fieldLabel: field.label,
-        reason: field.sensitivity === "manual-only"
-          ? "manual-only"
-          : field.sensitivity === "sensitive"
-            ? "sensitive"
-            : "sensitive-pattern",
+        reason: sensitivity,
       });
       continue;
     }
 
     for (const mapping of profileFieldMap) {
-      if (!mapping.tokens.some((token) => text.includes(normalizeText(token)))) continue;
+      if (!fieldHasAny(text, mapping.tokens)) continue;
       const raw = profile[mapping.column];
       if (!raw) continue;
 
@@ -181,6 +165,16 @@ export async function deterministicSuggestions(
     }
 
     if (suggestions.some((suggestion) => suggestion.fieldId === field.fieldId)) continue;
+
+    // Protected answers must come from explicit profile data, never fuzzy matching or AI.
+    if (sensitivity === "sensitive") {
+      blockedFields.push({
+        fieldId: field.fieldId,
+        fieldLabel: field.label,
+        reason: "sensitive-unconfigured",
+      });
+      continue;
+    }
 
     if (
       fieldHasAny(text, ["sponsorship", "visa sponsor", "employer sponsorship"]) &&

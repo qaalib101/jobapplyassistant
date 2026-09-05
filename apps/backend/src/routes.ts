@@ -6,37 +6,14 @@ import { config } from "./config";
 import { listProviders, getProvider } from "./providers";
 import { createSuggestions } from "./services/suggestionService";
 import { syncProfileFromContext } from "./services/profileContextSync";
-import { canonicalizeUrl, hashValue, hostname, redactValue } from "./utils/text";
+import { canonicalizeUrl, hostname } from "./utils/text";
 import { logSuggestionDecisions, getAuditTrail } from "./services/auditService";
 import logger from "./logger";
 import { DatabaseError, ValidationError, AIProviderError } from "./errors";
+import { fieldSchema, filledFieldsRequestSchema } from "./validation";
+import { logFillAttempts } from "./services/fillAuditService";
 
 const router = express.Router();
-
-const fieldSchema = z.object({
-  fieldId: z.string(),
-  label: z.string().optional(),
-  name: z.string().optional(),
-  id: z.string().optional(),
-  type: z.enum([
-    "text",
-    "textarea",
-    "email",
-    "tel",
-    "url",
-    "number",
-    "select",
-    "radio",
-    "checkbox",
-    "file",
-    "unknown",
-  ]),
-  placeholder: z.string().optional(),
-  required: z.boolean().optional(),
-  options: z.array(z.object({ label: z.string(), value: z.string() })).nullable().optional(),
-  domPathHash: z.string().optional(),
-  visible: z.boolean().optional(),
-});
 
 async function getOrCreateDefaultProfile() {
   try {
@@ -114,6 +91,11 @@ router.put("/profile", async (req, res, next) => {
         portfolioUrl: z.string().nullable().optional(),
         workAuthorization: z.string().nullable().optional(),
         sponsorshipRequired: z.boolean().nullable().optional(),
+        dateOfBirth: z.string().nullable().optional(),
+        gender: z.string().nullable().optional(),
+        raceEthnicity: z.string().nullable().optional(),
+        disabilityStatus: z.string().nullable().optional(),
+        veteranStatus: z.string().nullable().optional(),
       })
       .parse(req.body);
 
@@ -127,6 +109,11 @@ router.put("/profile", async (req, res, next) => {
       ...(body.portfolioUrl != null ? { portfolio_url: body.portfolioUrl } : {}),
       ...(body.workAuthorization != null ? { work_authorization: body.workAuthorization } : {}),
       ...(body.sponsorshipRequired != null ? { sponsorship_required: body.sponsorshipRequired } : {}),
+      ...(body.dateOfBirth != null ? { date_of_birth: body.dateOfBirth } : {}),
+      ...(body.gender != null ? { gender: body.gender } : {}),
+      ...(body.raceEthnicity != null ? { race_ethnicity: body.raceEthnicity } : {}),
+      ...(body.disabilityStatus != null ? { disability_status: body.disabilityStatus } : {}),
+      ...(body.veteranStatus != null ? { veteran_status: body.veteranStatus } : {}),
       updated_at: new Date(),
     };
 
@@ -481,36 +468,12 @@ router.post("/application-sessions/:id/suggestions", async (req, res, next) => {
 
 router.post("/application-sessions/:id/filled-fields", async (req, res, next) => {
   try {
-    const body = z
-      .object({
-        pageSnapshotId: z.string(),
-        fields: z.array(
-          z.object({
-            fieldSuggestionId: z.string().optional(),
-            fieldId: z.string(),
-            fieldLabel: z.string().optional(),
-            filledValue: z.string(),
-          }),
-        ),
-      })
-      .parse(req.body);
-
-    const inserted = [];
-    for (const field of body.fields) {
-      const log = await prisma.filledFieldLog.create({
-        data: {
-          application_session_id: req.params.id,
-          page_snapshot_id: body.pageSnapshotId,
-          field_suggestion_id: field.fieldSuggestionId ?? null,
-          field_id: field.fieldId,
-          field_label: field.fieldLabel ?? null,
-          filled_value_redacted: redactValue(field.filledValue),
-          value_hash: hashValue(field.filledValue),
-          user_confirmed: true,
-        },
-      });
-      inserted.push(log);
-    }
+    const body = filledFieldsRequestSchema.parse(req.body);
+    const inserted = await logFillAttempts({
+      applicationSessionId: req.params.id,
+      pageSnapshotId: body.pageSnapshotId,
+      fields: body.fields,
+    });
     res.status(201).json({ filledFields: inserted });
   } catch (error) {
     next(error);

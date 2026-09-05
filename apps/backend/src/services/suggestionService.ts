@@ -5,9 +5,11 @@ import { FieldMetadata, Suggestion, SuggestionResult } from "../types";
 import { assembleUserContext } from "./contextAssembler";
 import { deterministicSuggestions } from "./fieldMatcher";
 import { logBlockedFields } from "./auditService";
+import { effectiveSensitivity } from "./fieldPolicy";
 
 function shouldGenerate(field: FieldMetadata, existing: Suggestion[]) {
   if (existing.some((suggestion) => suggestion.fieldId === field.fieldId)) return false;
+  if (effectiveSensitivity(field) !== "normal") return false;
   if (field.type !== "textarea" && field.type !== "text") return false;
   const label = [field.label, field.name, field.placeholder].filter(Boolean).join(" ");
   if (/\b(gender|race|ethnicity|disability|veteran|birth|ssn|social security)\b/i.test(label)) {
@@ -180,8 +182,9 @@ export async function createSuggestions(input: {
     }
   }
 
+  const persistedSuggestions: Suggestion[] = [];
   for (const suggestion of suggestions) {
-    await prisma.fieldSuggestion.create({
+    const created = await prisma.fieldSuggestion.create({
       data: {
         application_session_id: input.applicationSessionId,
         page_snapshot_id: input.pageSnapshotId,
@@ -200,6 +203,7 @@ export async function createSuggestions(input: {
         requires_user_review: true,
       },
     });
+    persistedSuggestions.push({ ...suggestion, id: created.id });
   }
 
   // Log blocked fields in audit trail (no sensitive values stored)
@@ -212,7 +216,7 @@ export async function createSuggestions(input: {
   }
 
   return {
-    suggestions,
+    suggestions: persistedSuggestions,
     blockedFields,
     contextSummary: assembledContext.summary,
   };

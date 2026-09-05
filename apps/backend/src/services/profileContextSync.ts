@@ -44,6 +44,11 @@ export async function syncProfileFromContext(userProfileId: string, content: str
       portfolio_url: labeledValue(content, ["Portfolio / Website", "Portfolio", "Website"]),
       work_authorization: labeledValue(content, ["Work Authorization"]),
       sponsorship_required: yesNoValue(content, ["Requires Sponsorship"]),
+      date_of_birth: labeledValue(content, ["Date of Birth", "DOB"]),
+      gender: labeledValue(content, ["Gender"]),
+      race_ethnicity: labeledValue(content, ["Race / Ethnicity", "Race", "Ethnicity"]),
+      disability_status: labeledValue(content, ["Disability Status", "Disability"]),
+      veteran_status: labeledValue(content, ["Veteran Status", "Veteran"]),
       updated_at: new Date(),
     },
   });

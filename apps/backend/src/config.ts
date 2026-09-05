@@ -7,9 +7,9 @@ import path from "node:path";
 if (process.env.SKIP_DOTENV === "true") {
   console.log("[config] SKIP_DOTENV=true — skipping .env file loading (running in Docker)");
 } else {
-  // Explicitly load .env from project root so it works regardless of CWD
-  // __dirname is apps/backend/src, so we need to go up 3 levels to reach root
-  const envPath = path.resolve(__dirname, "../../../.env");
+  // Commands run from the repository root in both source and compiled modes.
+  // Using cwd avoids resolving to dist/.env after TypeScript compilation.
+  const envPath = path.resolve(process.cwd(), ".env");
 
   // Use override: true to ensure .env values take precedence over global env vars
   const envResult = dotenv.config({ path: envPath, override: true });

@@ -18,6 +18,11 @@ model UserProfile {
   portfolio_url        String?
   work_authorization   String?
   sponsorship_required Boolean?
+  date_of_birth        String?
+  gender               String?
+  race_ethnicity       String?
+  disability_status    String?
+  veteran_status       String?
   created_at           DateTime @default(now()) @db.Timestamptz(6)
   updated_at           DateTime @default(now()) @db.Timestamptz(6)
 
@@ -145,6 +150,7 @@ model ApplicationSession {
   field_suggestions       FieldSuggestion[]
   filled_field_logs       FilledFieldLog[]
   suggestion_decision_logs SuggestionDecisionLog[]
+  ai_request_logs           AIRequestLog[]
 
   @@index([user_profile_id, status], map: "application_sessions_user_status_idx")
   @@index([ats_domain], map: "application_sessions_domain_idx")
@@ -213,6 +219,8 @@ model FilledFieldLog {
   value_hash             String?
   fill_method            String   @default("user_selected")
   user_confirmed         Boolean  @default(true)
+  fill_succeeded         Boolean  @default(true)
+  failure_reason         String?
   filled_at              DateTime @default(now()) @db.Timestamptz(6)
 
   application_session ApplicationSession      @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
@@ -233,6 +241,10 @@ model AIRequestLog {
   success                Boolean
   error_message          String?
   created_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  application_session ApplicationSession? @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
+
+  @@index([application_session_id], map: "ai_request_logs_session_idx")
 
   @@map("ai_request_logs")
 }

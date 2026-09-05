@@ -44,8 +44,8 @@ describe("auditService", () => {
 
       expect(mockCreate).toHaveBeenCalledTimes(1);
       const callData = mockCreate.mock.calls[0][0].data;
-      expect(callData.application_session_id).toBe("session-1");
-      expect(callData.page_snapshot_id).toBe("snapshot-1");
+      expect(callData.application_session).toEqual({ connect: { id: "session-1" } });
+      expect(callData.page_snapshot).toEqual({ connect: { id: "snapshot-1" } });
       expect(callData.field_id).toBe("field-1");
       expect(callData.review_status).toBe("accepted");
       expect(callData.original_value_hash).toBe(hashValue("suggested text"));

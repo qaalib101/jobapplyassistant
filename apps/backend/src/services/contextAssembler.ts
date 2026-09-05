@@ -12,6 +12,36 @@ export interface AssembledUserContext {
   };
 }
 
+const protectedContextLabels = new Set([
+  "date of birth",
+  "dob",
+  "gender",
+  "race / ethnicity",
+  "race",
+  "ethnicity",
+  "disability status",
+  "disability",
+  "veteran status",
+  "veteran",
+]);
+
+function redactProtectedProfileLines(content: string) {
+  const lines = content.split(/\r?\n/);
+  const redacted: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(/^([^:]+):\s*(.*)$/);
+    const label = match?.[1]?.trim().toLowerCase();
+    if (!match || !label || !protectedContextLabels.has(label)) {
+      redacted.push(lines[index]);
+      continue;
+    }
+
+    redacted.push(`${match[1].trim()}: [stored as protected profile data]`);
+    if (!match[2]?.trim() && index + 1 < lines.length) index += 1;
+  }
+  return redacted.join("\n");
+}
+
 export async function assembleUserContext(userProfileId: string): Promise<AssembledUserContext> {
   const [profile, work, projects, skills, answers, resumes, contextDocuments] = await Promise.all([
     prisma.userProfile.findUnique({ where: { id: userProfileId } }),
@@ -53,15 +83,29 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
     0,
   );
 
+  // Protected profile answers are used only for deterministic form matching.
+  // Do not include them automatically in requests for unrelated AI-generated answers.
+  const {
+    date_of_birth: _dateOfBirth,
+    gender: _gender,
+    race_ethnicity: _raceEthnicity,
+    disability_status: _disabilityStatus,
+    veteran_status: _veteranStatus,
+    ...aiSafeProfile
+  } = profile ?? {};
+
   const context = [
     "UPLOADED APPLICATION ASSISTANT CONTEXT",
     contextDocuments
-      .map((row: { title: string; content: string | null }) => [`Title: ${row.title}`, String(row.content ?? "").slice(0, 14000)].join("\n"))
+      .map((row: { title: string; content: string | null }) => [
+        `Title: ${row.title}`,
+        redactProtectedProfileLines(String(row.content ?? "")).slice(0, 14000),
+      ].join("\n"))
       .join("\n\n---\n\n") || "None",
     "",
     "STRUCTURED PROFILE DATA",
     JSON.stringify({
-      profile,
+      profile: aiSafeProfile,
       work,
       projects,
       skills,

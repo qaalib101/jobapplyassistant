@@ -9,6 +9,8 @@ export type FieldType =
   | "radio"
   | "checkbox"
   | "file"
+  | "password"
+  | "date"
   | "unknown";
 
 export type FieldSensitivity = "normal" | "sensitive" | "manual-only";
@@ -48,6 +50,7 @@ export interface FieldMetadata {
 }
 
 export interface Suggestion {
+  id?: string;
   fieldId: string;
   fieldLabel?: string;
   fieldType: FieldType;
