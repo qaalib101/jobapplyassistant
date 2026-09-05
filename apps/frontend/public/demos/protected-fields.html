@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protected Fields Demo</title>
+    <link rel="stylesheet" href="/demos/demo.css" />
+  </head>
+  <body>
+    <main>
+      <header><h1>Protected Fields</h1><p>These fields verify manual-entry safeguards.</p></header>
+      <form>
+        <div class="grid">
+          <label><span>Email</span><input type="email" name="email" /></label>
+          <label><span>Date of birth</span><input type="date" name="dateOfBirth" /></label>
+          <label><span>Social Security Number</span><input name="ssn" /></label>
+          <label><span>Gender</span><select name="gender"><option value="">Choose</option><option>Non-binary</option><option>Prefer not to say</option></select></label>
+          <label><span>Race / Ethnicity</span><select name="race"><option value="">Choose</option><option>Prefer not to say</option></select></label>
+          <label><span>Disability status</span><select name="disability"><option value="">Choose</option><option>No, I do not have a disability</option><option>Prefer not to say</option></select></label>
+          <label><span>Veteran status</span><select name="veteran"><option value="">Choose</option><option>I am not a protected veteran</option><option>Prefer not to say</option></select></label>
+          <label><span>Account password</span><input type="password" name="password" /></label>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

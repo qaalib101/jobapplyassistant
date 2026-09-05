@@ -10,6 +10,11 @@ interface Profile {
   portfolio_url?: string | null;
   work_authorization?: string | null;
   sponsorship_required?: boolean | null;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  race_ethnicity?: string | null;
+  disability_status?: string | null;
+  veteran_status?: string | null;
   updated_at?: string;
 }
 
@@ -242,6 +247,11 @@ export function App() {
       ["Portfolio", profile.portfolio_url],
       ["Work auth", profile.work_authorization],
       ["Sponsorship", profile.sponsorship_required],
+      ["Date of birth", profile.date_of_birth],
+      ["Gender", profile.gender],
+      ["Race / ethnicity", profile.race_ethnicity],
+      ["Disability", profile.disability_status],
+      ["Veteran", profile.veteran_status],
       ["Updated", profile.updated_at],
     ] as Array<[string, unknown]>;
   }, [sources]);

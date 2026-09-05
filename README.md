@@ -11,7 +11,7 @@ The goal is to help applicants move through multi-page ATS forms without buildin
 - Supports multi-page application sessions with page snapshots and filled-field logs.
 - Shows confidence and source context for suggestions.
 - Requires user review before filling anything.
-- Offers **Fill selected** and an explicit **Fill all reviewed** action; the latter includes every suggestion, regardless of checkbox selection.
+- Uses a single **Confirm & fill selected** action. Generated drafts start unchecked, and complete autofill is intentionally deferred.
 - Supports DeepSeek as the intended remote AI provider, with optional OpenAI, Ollama, mock, and no-AI modes.
 - Includes a lightweight local UI for pasting general AI context about yourself.
 - Provides a collapsible browser extension side panel.
@@ -52,6 +52,7 @@ apps/
   extension/
     public/               MV3 manifest and side panel HTML/CSS
     src/                  background, content scripts, side panel controller
+e2e/                      Playwright extension and full-stack browser tests
 prisma/
   schema.prisma           Database models
   migrations/             Postgres migrations
@@ -161,6 +162,10 @@ The context document can include:
 
 This is stored in Postgres, syncs basic profile fields, and is included when the backend drafts answers for uncommon application questions. Remote providers receive assembled user context and scanned page text; local storage does not mean that remote AI processing stays on the machine.
 
+Common reusable values are stored as structured profile fields. The context importer recognizes labels such as `Full Name`, `Email`, `Phone`, `City`, `State`, `Country`, `LinkedIn`, `GitHub`, `Portfolio`, `Work Authorization`, `Requires Sponsorship`, `Date of Birth`, `Gender`, `Race / Ethnicity`, `Disability Status`, and `Veteran Status`.
+
+Date of birth and EEO answers are protected profile values: they are used only for deterministic matching, are not automatically added to unrelated AI prompts, and always start unchecked in the extension. The user must explicitly select each protected suggestion before it can be filled. SSNs and passwords remain manual-only and are never suggested or filled.
+
 ## Demo Forms
 
 Open:
@@ -183,9 +188,9 @@ Use these pages to demonstrate the extension flow without submitting anything to
 4. Upload, paste, or edit resume text in the side panel.
 5. Optionally click **Tailor from scanned JD** to generate a resume draft, then review it. Save context/resume changes and scan again to regenerate field suggestions.
 6. Review and edit field suggestions.
-7. Click **Fill all reviewed** or select fields and click **Fill selected**.
+7. Select the answers you approve and click **Confirm & fill selected**.
 
-After a successful scan, filling targets the scanned tab rather than whichever tab is currently active. Rescan after navigation or a failed scan, and verify the actual form values after filling. The current implementation does not use the filler's per-field result to determine which fields to log as filled.
+After a successful scan, filling targets the scanned tab rather than whichever tab is currently active. Rescan after navigation or a failed scan, and verify the actual form values after filling. Each field's real fill result is recorded. Protected profile answers can succeed only after explicit selection; manual-only or missing fields are logged as unsuccessful without storing their attempted values.
 
 ## AI Providers
 
@@ -258,7 +263,26 @@ npm test
 
 Individual suites are available through `npm run test:backend`, `npm run test:extension`, and `npm run test:frontend`. Run their corresponding `:watch` scripts in separate terminals; the root watch command chains persistent watchers sequentially.
 
-Current test limitations: the audit-service test for hashed decision records has a stale expectation for Prisma's relation-write shape and fails. Scanner/filler tests copy classification logic instead of exercising the actual content scripts; the frontend test is a placeholder. The suite does not establish end-to-end ATS compatibility.
+### Browser end-to-end tests
+
+Install Playwright's bundled Chromium once, then run the browser suite:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+`test:e2e` builds and loads the real Manifest V3 extension in Playwright Chromium, starts the backend with `AI_PROVIDER=mock`, creates and migrates a disposable PostgreSQL database, and removes that database when the run finishes. Docker must be running and the Compose PostgreSQL service must be available on host port `5432`.
+
+The suite covers Greenhouse- and Lever-style forms, protected fields, persisted audit records, and a multi-page Workday-style flow. In the Workday case, the browser test clicks each page's **Next** link as the user would; the extension never advances the application itself and is explicitly rescanned after navigation.
+
+To run unit, integration, and browser tests together:
+
+```bash
+npm run test:all
+```
+
+These fixtures exercise representative form structures, not every live ATS implementation. Live sites can change their markup and should be added as targeted fixtures when incompatibilities are found.
 
 ## Load The Extension Locally
 
@@ -341,7 +365,7 @@ Next useful improvements:
 
 - The companion API is unauthenticated and intended for trusted local use, not public hosting.
 - Session resolution can group distinct jobs on the same ATS domain into one active session.
-- Scanner/filler label heuristics differ, so some detected fields cannot be filled. Audit entries currently record requested fills without checking actual field results.
+- Native fields can still change between scanning and confirmation; failed or missing targets are reported per field and should be rescanned.
 - Sensitive-field handling is incomplete across the scanner/API boundary; password fields are not accepted by the API field schema. Review the page and avoid relying on the extension for sensitive fields.
 - Model JSON is parsed without complete runtime validation of answer shapes. Generated suggestions always need review.
 - Resume uploads support text and Markdown only, not PDF or Word parsing.

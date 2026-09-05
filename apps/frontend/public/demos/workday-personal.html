@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workday Personal Information Demo</title>
+    <link rel="stylesheet" href="/demos/demo.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Workday-style Step: Personal Information</h1>
+        <p>The applicant controls navigation between every page.</p>
+      </header>
+      <form>
+        <div class="grid">
+          <label class="full"><span>Legal Name</span><input name="legalName" required /></label>
+          <label><span>Primary Email</span><input type="email" name="primaryEmail" required /></label>
+          <label><span>Phone</span><input type="tel" name="phone" /></label>
+          <label class="full"><span>Current Location</span><input name="location" /></label>
+        </div>
+        <div class="actions">
+          <a class="button secondary" href="/demos/">Cancel</a>
+          <a class="button" href="/demos/workday-step.html">Next</a>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>
