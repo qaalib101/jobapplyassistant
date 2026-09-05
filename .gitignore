@@ -11,6 +11,9 @@ yarn-error.log*
 combined.log
 error.log
 logs/
+.e2e-results/
+playwright-report/
+test-results/
 .env
 .env.local
 /.pnp
