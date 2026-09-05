@@ -35,6 +35,16 @@
     category?: FieldCategory;
   }
 
+const availableFieldPolicy = (globalThis as typeof globalThis & {
+  JobApplyAssistantFieldPolicy?: {
+    classifySensitivity(label: string, name: string | undefined, id: string | undefined, type: string): FieldSensitivity;
+    classifyCategory(label: string, name: string | undefined, id: string | undefined): FieldCategory;
+  };
+}).JobApplyAssistantFieldPolicy;
+
+if (!availableFieldPolicy) throw new Error("Job Apply Assistant field policy was not loaded.");
+const fieldPolicy = availableFieldPolicy;
+
 function isVisible(element: HTMLElement) {
   const style = window.getComputedStyle(element);
   const rect = element.getBoundingClientRect();
@@ -178,106 +188,11 @@ function fieldType(element: Element) {
   if (element instanceof HTMLTextAreaElement) return "textarea";
   if (element instanceof HTMLSelectElement) return "select";
   if (element instanceof HTMLInputElement) {
-    if (["email", "tel", "url", "number", "radio", "checkbox", "file", "password"].includes(element.type)) {
+    if (["email", "tel", "url", "number", "radio", "checkbox", "file", "password", "date"].includes(element.type)) {
       return element.type;
     }
     return "text";
   }
-  return "unknown";
-}
-
-const MANUAL_ONLY_TOKENS = [
-  "ssn",
-  "social security",
-  "social security number",
-  "date of birth",
-  "dob",
-  "birth date",
-  "birthday",
-  "password",
-  "confirm password",
-  "password confirmation",
-];
-
-const SENSITIVE_TOKENS = [
-  "gender",
-  "sex",
-  "race",
-  "ethnicity",
-  "ethnic origin",
-  "demographic",
-  "eeo",
-  "equal employment",
-  "disability",
-  "disabled",
-  "veteran",
-  "veteran status",
-  "military status",
-];
-
-function normalizeForClassification(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function classifySensitivity(
-  label: string,
-  name: string | undefined,
-  id: string | undefined,
-  type: string,
-): FieldSensitivity {
-  if (type === "password") return "manual-only";
-
-  const searchText = normalizeForClassification([label, name, id].filter(Boolean).join(" "));
-
-  for (const token of MANUAL_ONLY_TOKENS) {
-    if (searchText.includes(token)) return "manual-only";
-  }
-
-  for (const token of SENSITIVE_TOKENS) {
-    if (searchText.includes(token)) return "sensitive";
-  }
-
-  return "normal";
-}
-
-const CATEGORY_RULES: Array<{ tokens: string[]; category: FieldCategory }> = [
-  // More specific categories first to avoid false matches
-  { tokens: ["gender", "sex", "pronoun"], category: "gender" },
-  { tokens: ["race", "ethnicity", "ethnic", "ethnic origin"], category: "race" },
-  { tokens: ["disability", "disabled", "impairment", "handicap"], category: "disability" },
-  { tokens: ["veteran", "military", "armed forces", "army", "navy", "air force", "marine"], category: "veteran" },
-  { tokens: ["eeo", "equal employment", "equal opportunity"], category: "eeo" },
-  { tokens: ["demographic"], category: "demographic" },
-  { tokens: ["date of birth", "dob", "birth date", "birthday", "age"], category: "personal" },
-  { tokens: ["ssn", "social security"], category: "personal" },
-  { tokens: ["password"], category: "personal" },
-  { tokens: ["marital", "married", "single", "divorced"], category: "personal" },
-  { tokens: ["citizen", "citizenship", "nationality", "national"], category: "personal" },
-  { tokens: ["company", "employer", "work", "job", "position", "title", "experience", "employment"], category: "work" },
-  { tokens: ["education", "school", "university", "college", "degree", "gpa", "major"], category: "work" },
-  { tokens: ["salary", "compensation", "pay", "wage", "income"], category: "work" },
-  { tokens: ["authorization", "authorized", "work authorization", "visa", "sponsorship"], category: "work" },
-  // General contact category last
-  { tokens: ["name", "first name", "last name", "full name", "given name", "family name"], category: "contact" },
-  { tokens: ["email", "e-mail", "email address"], category: "contact" },
-  { tokens: ["phone", "mobile", "telephone", "cell", "fax"], category: "contact" },
-  { tokens: ["address", "street", "city", "state", "zip", "postal", "country", "location"], category: "contact" },
-  { tokens: ["linkedin", "github", "portfolio", "website", "url", "profile"], category: "contact" },
-];
-
-function classifyCategory(
-  label: string,
-  name: string | undefined,
-  id: string | undefined,
-): FieldCategory {
-  const searchText = normalizeForClassification([label, name, id].filter(Boolean).join(" "));
-
-  for (const rule of CATEGORY_RULES) {
-    for (const token of rule.tokens) {
-      if (searchText.includes(token)) return rule.category;
-    }
-  }
-
   return "unknown";
 }
 
@@ -337,8 +252,8 @@ function scanVisibleFields(): FieldMetadata[] {
         options: optionsFor(element),
         domPathHash: pathHash,
         visible: true,
-        sensitivity: classifySensitivity(label, element.name || undefined, element.id || undefined, type),
-        category: classifyCategory(label, element.name || undefined, element.id || undefined),
+        sensitivity: fieldPolicy.classifySensitivity(label, element.name || undefined, element.id || undefined, type),
+        category: fieldPolicy.classifyCategory(label, element.name || undefined, element.id || undefined),
         currentValue,
         checked,
       };

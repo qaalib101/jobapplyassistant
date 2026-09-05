@@ -32,6 +32,7 @@ interface FieldMetadata {
 }
 
 interface Suggestion {
+  id?: string;
   fieldId: string;
   fieldLabel?: string;
   fieldType: string;
@@ -61,6 +62,12 @@ interface BlockedFieldInfo {
   fieldId: string;
   fieldLabel?: string;
   reason: string;
+}
+
+interface FillResult {
+  fieldId: string;
+  filled: boolean;
+  skipped?: string;
 }
 
 interface ScanResult {
@@ -102,7 +109,6 @@ let contextSummary: ContextSummary | undefined;
 
 const scanButton = document.querySelector<HTMLButtonElement>("#scanButton");
 const fillButton = document.querySelector<HTMLButtonElement>("#fillButton");
-const fillAllButton = document.querySelector<HTMLButtonElement>("#fillAllButton");
 const collapseButton = document.querySelector<HTMLButtonElement>("#collapseButton");
 const expandButton = document.querySelector<HTMLButtonElement>("#expandButton");
 const toggleResumeButton = document.querySelector<HTMLButtonElement>("#toggleResumeButton");
@@ -138,7 +144,6 @@ function setBusy(busy: boolean, text?: string) {
   [
     scanButton,
     fillButton,
-    fillAllButton,
     saveResumeButton,
     tailorResumeButton,
     selectHighConfidenceButton,
@@ -236,7 +241,7 @@ async function ensurePagePermission(tab: chrome.tabs.Tab) {
 async function ensureContentScripts(tabId: number) {
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["content/scanner.js", "content/filler.js"],
+    files: ["content/fieldPolicy.js", "content/scanner.js", "content/filler.js"],
   });
 }
 
@@ -282,6 +287,7 @@ function renderSuggestions() {
   suggestionsElement.replaceChildren();
 
   for (const suggestion of suggestions) {
+    const sensitivity = detectedFields.find((field) => field.fieldId === suggestion.fieldId)?.sensitivity ?? "normal";
     const row = document.createElement("label");
     row.className = "suggestion";
 
@@ -289,7 +295,8 @@ function renderSuggestions() {
     checkbox.type = "checkbox";
     checkbox.name = "field";
     checkbox.value = suggestion.fieldId;
-    checkbox.checked = suggestion.confidence >= 0.9 && !suggestion.isGenerated;
+    checkbox.checked = sensitivity === "normal" && suggestion.confidence >= 0.9 && !suggestion.isGenerated;
+    checkbox.addEventListener("change", updateFillButtonLabel);
 
     const body = document.createElement("div");
     const title = document.createElement("div");
@@ -316,6 +323,7 @@ function renderSuggestions() {
       suggestion.provider ? `provider: ${suggestion.provider}` : "",
       suggestion.model ? `model: ${suggestion.model}` : "",
       suggestion.isGenerated ? "generated draft" : "",
+      sensitivity === "sensitive" ? "protected answer" : "",
       suggestion.sourceContext?.contextUsed ? `context: ${suggestion.sourceContext.contextUsed}` : "",
     ].filter(Boolean);
     source.textContent = sourceParts.join(" · ");
@@ -325,6 +333,11 @@ function renderSuggestions() {
       const warning = document.createElement("div");
       warning.className = "generated-warning";
       warning.textContent = "Generated draft. Edit and review before filling.";
+      body.append(warning);
+    } else if (sensitivity === "sensitive") {
+      const warning = document.createElement("div");
+      warning.className = "generated-warning";
+      warning.textContent = "Protected profile answer. Confirm this field explicitly before filling.";
       body.append(warning);
     }
     row.append(checkbox, body);
@@ -346,7 +359,7 @@ function renderSuggestions() {
     source.className = "source";
     const sourceParts = ["Detected field"];
     if (field.sensitivity && field.sensitivity !== "normal") {
-      sourceParts.push(`sensitivity: ${field.sensitivity}`);
+      sourceParts.push(`manual entry: ${field.sensitivity}`);
     }
     if (field.category && field.category !== "unknown") {
       sourceParts.push(`category: ${field.category}`);
@@ -363,6 +376,14 @@ function renderSuggestions() {
     row.append(spacer, body);
     suggestionsElement.append(row);
   }
+  updateFillButtonLabel();
+}
+
+function updateFillButtonLabel() {
+  if (!fillButton) return;
+  const count = document.querySelectorAll<HTMLInputElement>('input[name="field"]:checked').length;
+  fillButton.textContent = count > 0 ? `Confirm & fill ${count} selected` : "Select fields to fill";
+  fillButton.disabled = count === 0;
 }
 
 function reviewedValue(fieldId: string) {
@@ -378,6 +399,7 @@ function setAllSelections(selected: boolean) {
     .forEach((input) => {
       input.checked = selected;
     });
+  updateFillButtonLabel();
 }
 
 function selectHighConfidence() {
@@ -385,12 +407,18 @@ function selectHighConfidence() {
     .querySelectorAll<HTMLInputElement>('input[name="field"]')
     .forEach((input) => {
       const suggestion = suggestions.find((item) => item.fieldId === input.value);
-      input.checked = Boolean(suggestion && suggestion.confidence >= 0.85 && !suggestion.isGenerated);
+      const sensitivity = detectedFields.find((field) => field.fieldId === input.value)?.sensitivity ?? "normal";
+      input.checked = Boolean(
+        suggestion &&
+        sensitivity === "normal" &&
+        suggestion.confidence >= 0.85 &&
+        !suggestion.isGenerated,
+      );
     });
+  updateFillButtonLabel();
 }
 
-function selectedSuggestionsFromDom(fillAll = false) {
-  if (fillAll) return suggestions;
+function selectedSuggestionsFromDom() {
   const selected = Array.from(
     document.querySelectorAll<HTMLInputElement>('input[name="field"]:checked'),
   ).map((input) => input.value);
@@ -557,7 +585,7 @@ async function scanPage() {
     const blockedCount = response.blockedFields?.length ?? 0;
     renderSession(activeSession);
     renderSuggestions();
-    const blockedMsg = blockedCount > 0 ? ` ${blockedCount} field(s) blocked (manual-only).` : "";
+    const blockedMsg = blockedCount > 0 ? ` ${blockedCount} protected field(s) require manual entry.` : "";
     setStatus(
       suggestions.length
         ? `Review suggestions and select fields to fill.${blockedMsg}`
@@ -571,21 +599,20 @@ async function scanPage() {
   }
 }
 
-async function fillSuggestions(fillAll = false) {
+async function fillSuggestions() {
   if (!activeSession || !pageSnapshotId) return;
 
-  const selectedSuggestions = selectedSuggestionsFromDom(fillAll);
+  const selectedSuggestions = selectedSuggestionsFromDom();
   if (!selectedSuggestions.length) {
     setStatus("Select at least one suggestion to fill.");
     return;
   }
 
   fillButton?.setAttribute("disabled", "true");
-  fillAllButton?.setAttribute("disabled", "true");
-  setStatus(fillAll ? "Filling all reviewed suggestions..." : "Filling selected fields...");
+  setStatus("Filling your confirmed selections...");
 
   try {
-    await chrome.tabs.sendMessage(lockedTabId(), {
+    const fillResponse = await chrome.tabs.sendMessage<unknown, { results?: FillResult[] }>(lockedTabId(), {
       type: "FILL_SELECTED_FIELDS",
       fields: selectedSuggestions.map((suggestion) => ({
         fieldId: suggestion.fieldId,
@@ -593,15 +620,26 @@ async function fillSuggestions(fillAll = false) {
       })),
     });
 
+    const resultsByField = new Map(
+      (fillResponse.results ?? []).map((result) => [result.fieldId, result]),
+    );
+
     await api(`/application-sessions/${activeSession.id}/filled-fields`, {
       method: "POST",
       body: JSON.stringify({
         pageSnapshotId,
-        fields: selectedSuggestions.map((suggestion) => ({
-          fieldId: suggestion.fieldId,
-          fieldLabel: suggestion.fieldLabel,
-          filledValue: reviewedValue(suggestion.fieldId),
-        })),
+        fields: selectedSuggestions.map((suggestion) => {
+          const result = resultsByField.get(suggestion.fieldId);
+          const filled = result?.filled ?? false;
+          return {
+            fieldSuggestionId: suggestion.id,
+            fieldId: suggestion.fieldId,
+            fieldLabel: suggestion.fieldLabel,
+            filled,
+            filledValue: filled ? reviewedValue(suggestion.fieldId) : undefined,
+            skipped: filled ? undefined : result?.skipped ?? "no-fill-result",
+          };
+        }),
       }),
     });
 
@@ -611,6 +649,7 @@ async function fillSuggestions(fillAll = false) {
       const wasEdited = currentValue !== suggestion.suggestedValue;
       return {
         fieldId: suggestion.fieldId,
+        fieldSuggestionId: suggestion.id,
         reviewStatus: wasEdited ? "edited" : "accepted",
         originalValue: suggestion.suggestedValue,
         editedValue: wasEdited ? currentValue : undefined,
@@ -644,23 +683,30 @@ async function fillSuggestions(fillAll = false) {
       }),
     });
 
-    setStatus("Selected fields filled. Review the page before continuing.");
+    const filledCount = selectedSuggestions.filter(
+      (suggestion) => resultsByField.get(suggestion.fieldId)?.filled,
+    ).length;
+    const failedCount = selectedSuggestions.length - filledCount;
+    setStatus(
+      failedCount > 0
+        ? `${filledCount} field(s) filled; ${failedCount} could not be filled. Review the page and rescan if needed.`
+        : `${filledCount} field(s) filled. Review the page before continuing.`,
+    );
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Fill failed.");
   } finally {
     fillButton?.removeAttribute("disabled");
-    fillAllButton?.removeAttribute("disabled");
+    updateFillButtonLabel();
   }
 }
 
 async function fillSelected(event: SubmitEvent) {
   event.preventDefault();
-  await fillSuggestions(false);
+  await fillSuggestions();
 }
 
 scanButton?.addEventListener("click", scanPage);
 suggestionsForm?.addEventListener("submit", fillSelected);
-fillAllButton?.addEventListener("click", () => fillSuggestions(true));
 collapseButton?.addEventListener("click", () => setCollapsed(true));
 expandButton?.addEventListener("click", () => setCollapsed(false));
 selectHighConfidenceButton?.addEventListener("click", selectHighConfidence);

@@ -11,6 +11,11 @@ await fs.mkdir(path.join(target, "content"), { recursive: true });
 await fs.mkdir(path.join(target, "ui"), { recursive: true });
 
 await fs.copyFile(
+  path.resolve("dist/apps/extension/src/content/fieldPolicy.js"),
+  path.join(target, "content/fieldPolicy.js"),
+);
+
+await fs.copyFile(
   path.resolve("dist/apps/extension/src/background/serviceWorker.js"),
   path.join(target, "background/serviceWorker.js"),
 );

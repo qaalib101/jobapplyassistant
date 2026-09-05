@@ -6,6 +6,15 @@ interface FillRequest {
   value: string;
 }
 
+const availableFieldPolicy = (globalThis as typeof globalThis & {
+  JobApplyAssistantFieldPolicy?: {
+    classifySensitivity(label: string, name: string | undefined, id: string | undefined, type: string): FieldSensitivity;
+  };
+}).JobApplyAssistantFieldPolicy;
+
+if (!availableFieldPolicy) throw new Error("Job Apply Assistant field policy was not loaded.");
+const fieldPolicy = availableFieldPolicy;
+
 function hash(value: string) {
   let result = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -64,46 +73,12 @@ function fieldType(element: Element) {
   if (element instanceof HTMLTextAreaElement) return "textarea";
   if (element instanceof HTMLSelectElement) return "select";
   if (element instanceof HTMLInputElement) {
-    if (["email", "tel", "url", "number", "radio", "checkbox", "file", "password"].includes(element.type)) {
+    if (["email", "tel", "url", "number", "radio", "checkbox", "file", "password", "date"].includes(element.type)) {
       return element.type;
     }
     return "text";
   }
   return "unknown";
-}
-
-const MANUAL_ONLY_TOKENS = [
-  "ssn",
-  "social security",
-  "social security number",
-  "date of birth",
-  "dob",
-  "birth date",
-  "birthday",
-  "password",
-  "confirm password",
-  "password confirmation",
-];
-
-function normalizeForClassification(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function classifySensitivity(
-  label: string,
-  name: string | undefined,
-  id: string | undefined,
-  type: string,
-): FieldSensitivity {
-  if (type === "password") return "manual-only";
-
-  const searchText = normalizeForClassification([label, name, id].filter(Boolean).join(" "));
-
-  for (const token of MANUAL_ONLY_TOKENS) {
-    if (searchText.includes(token)) return "manual-only";
-  }
-
-  return "normal";
 }
 
 function fieldId(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
@@ -128,7 +103,15 @@ function fillElement(
   if (element instanceof HTMLInputElement && element.type === "file") return false;
 
   if (element instanceof HTMLSelectElement) {
-    element.value = value;
+    const normalizedValue = value.trim().toLowerCase();
+    const option = Array.from(element.options).find(
+      (candidate) =>
+        candidate.value.trim().toLowerCase() === normalizedValue ||
+        candidate.text.trim().toLowerCase() === normalizedValue,
+    );
+    if (!option) return false;
+    element.value = option.value;
+    if (element.value !== option.value) return false;
     element.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   }
@@ -166,10 +149,10 @@ function fillSelectedFields(fields: FillRequest[]) {
 
     const type = fieldType(element);
     const label = labelFor(element);
-    const sensitivity = classifySensitivity(label, element.name || undefined, element.id || undefined, type);
+    const sensitivity = fieldPolicy.classifySensitivity(label, element.name || undefined, element.id || undefined, type);
 
     if (sensitivity === "manual-only") {
-      results.push({ fieldId: field.fieldId, filled: false, skipped: "manual-only" });
+      results.push({ fieldId: field.fieldId, filled: false, skipped: sensitivity });
       continue;
     }
 

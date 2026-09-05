@@ -43,6 +43,7 @@ export type ReviewStatus =
   | "blocked";
 
 export interface Suggestion {
+  id?: string;
   fieldId: string;
   fieldLabel?: string;
   fieldType: string;
