@@ -107,6 +107,61 @@ test("Greenhouse: scans, uses mock AI, confirms, fills, and audits", async ({ pa
   expect(await prisma.suggestionDecisionLog.count({ where: { application_session_id: session.id, field_suggestion_id: { not: null } } })).toBeGreaterThan(5);
 });
 
+test("A pending review is restored only for its scanned tab and stale pages cannot fill", async ({
+  context,
+  extensionId,
+  page,
+  sidePanel,
+}) => {
+  await page.goto("http://greenhouse.localhost:4327/demos/greenhouse.html");
+  await scan(page, sidePanel);
+
+  const draft = suggestion(sidePanel, "Why are you interested");
+  await draft.locator("textarea").fill("My tab-specific edited answer.");
+  await draft.locator('input[type="checkbox"]').check();
+
+  const applicationTabId = await sidePanel.evaluate(async () => {
+    const tabs = await chrome.tabs.query({ url: "http://greenhouse.localhost:4327/*" });
+    return tabs[0]?.id;
+  });
+  expect(applicationTabId).toBeTruthy();
+
+  await expect.poll(async () => sidePanel.evaluate(async (tabId) => {
+    const stored = await chrome.storage.session.get(`reviewState:${tabId}`);
+    return Object.values(stored[`reviewState:${tabId}`]?.reviewedValues ?? {});
+  }, applicationTabId)).toContain("My tab-specific edited answer.");
+
+  const restoredPanel = await context.newPage();
+  await restoredPanel.goto(
+    `chrome-extension://${extensionId}/ui/sidepanel.html?tabId=${applicationTabId}`,
+  );
+  const restoredDraft = suggestion(restoredPanel, "Why are you interested");
+  await expect(restoredDraft.locator("textarea")).toHaveValue("My tab-specific edited answer.");
+  await expect(restoredDraft.locator('input[type="checkbox"]')).toBeChecked();
+
+  const otherTab = await context.newPage();
+  await otherTab.goto("http://lever.localhost:4327/demos/lever.html");
+  const otherTabId = await restoredPanel.evaluate(async () => {
+    const tabs = await chrome.tabs.query({ url: "http://lever.localhost:4327/*" });
+    return tabs[0]?.id;
+  });
+  const otherPanel = await context.newPage();
+  await otherPanel.goto(`chrome-extension://${extensionId}/ui/sidepanel.html?tabId=${otherTabId}`);
+  await expect(otherPanel.locator(".suggestion")).toHaveCount(0);
+
+  await page.bringToFront();
+  await page.locator('[name="first_name"]').evaluate((element) => element.remove());
+  await restoredPanel.locator("#suggestionsForm").evaluate((form: HTMLFormElement) => form.requestSubmit());
+  await expect(restoredPanel.locator("#statusText")).toHaveText(
+    "This application page changed. Rescan before filling these suggestions.",
+  );
+  await expect(page.locator('[name="interest"]')).toHaveValue("");
+
+  await otherPanel.close();
+  await otherTab.close();
+  await restoredPanel.close();
+});
+
 test("Lever: handles radio options and a mock-generated project answer", async ({ page, sidePanel }) => {
   await page.goto("http://lever.localhost:4327/demos/lever.html");
   await scan(page, sidePanel);

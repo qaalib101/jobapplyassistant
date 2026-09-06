@@ -98,6 +98,23 @@ interface ContextDocument {
   is_active?: boolean;
 }
 
+interface StoredReviewState {
+  version: 1;
+  tabId: number;
+  pageUrl: string;
+  pageTitle: string;
+  pageSignature: string;
+  activeSession: ApplicationSession;
+  pageSnapshotId: string;
+  suggestions: Suggestion[];
+  detectedFields: FieldMetadata[];
+  scannedPageText: string;
+  contextSummary?: ContextSummary;
+  selectedFieldIds: string[];
+  reviewedValues: Record<string, string>;
+  status: string;
+}
+
 let activeTabId: number | undefined;
 let activeSession: ApplicationSession | undefined;
 let pageSnapshotId: string | undefined;
@@ -106,6 +123,10 @@ let detectedFields: FieldMetadata[] = [];
 let scannedPageText = "";
 let savedResumeVersionId: string | undefined;
 let contextSummary: ContextSummary | undefined;
+let scannedPageUrl = "";
+let scannedPageTitle = "";
+let scannedPageSignature = "";
+let persistTimer: number | undefined;
 
 const scanButton = document.querySelector<HTMLButtonElement>("#scanButton");
 const fillButton = document.querySelector<HTMLButtonElement>("#fillButton");
@@ -210,8 +231,94 @@ async function api<T>(path: string, init?: RequestInit, timeoutMs = 30000): Prom
 async function activeTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab.id) throw new Error("No active tab found.");
-  activeTabId = tab.id;
   return tab;
+}
+
+function requestedTabId() {
+  const value = new URLSearchParams(location.search).get("tabId");
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function reviewStateKey(tabId: number) {
+  return `reviewState:${tabId}`;
+}
+
+function signatureFor(fields: FieldMetadata[]) {
+  return fields
+    .map((field) => `${field.fieldId}:${field.type}`)
+    .sort()
+    .join("|");
+}
+
+function selectedFieldIds() {
+  return Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[name="field"]:checked'),
+  ).map((input) => input.value);
+}
+
+function reviewedValues() {
+  return Object.fromEntries(
+    Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(".value[data-field-id]"))
+      .map((input) => [input.dataset.fieldId ?? "", input.value])
+      .filter(([fieldId]) => Boolean(fieldId)),
+  );
+}
+
+async function persistReviewState() {
+  if (!activeTabId || !activeSession || !pageSnapshotId || !scannedPageUrl) return;
+  const state: StoredReviewState = {
+    version: 1,
+    tabId: activeTabId,
+    pageUrl: scannedPageUrl,
+    pageTitle: scannedPageTitle,
+    pageSignature: scannedPageSignature,
+    activeSession,
+    pageSnapshotId,
+    suggestions,
+    detectedFields,
+    scannedPageText,
+    contextSummary,
+    selectedFieldIds: selectedFieldIds(),
+    reviewedValues: reviewedValues(),
+    status: statusTextElement?.textContent ?? "Review suggestions and select fields to fill.",
+  };
+  await chrome.storage.session.set({ [reviewStateKey(activeTabId)]: state });
+}
+
+function queuePersistReviewState() {
+  if (persistTimer !== undefined) window.clearTimeout(persistTimer);
+  persistTimer = window.setTimeout(() => {
+    persistReviewState().catch(() => undefined);
+  }, 150);
+}
+
+async function restoreReviewState(tabId: number) {
+  const stored = await chrome.storage.session.get(reviewStateKey(tabId));
+  const state = stored[reviewStateKey(tabId)] as StoredReviewState | undefined;
+  if (!state || state.version !== 1 || state.tabId !== tabId) return false;
+
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.url !== state.pageUrl) {
+    await chrome.storage.session.remove(reviewStateKey(tabId));
+    setStatus("This tab has navigated to a different page. Scan it to start a new review.");
+    return false;
+  }
+
+  activeSession = state.activeSession;
+  pageSnapshotId = state.pageSnapshotId;
+  suggestions = state.suggestions;
+  detectedFields = state.detectedFields;
+  scannedPageText = state.scannedPageText;
+  contextSummary = state.contextSummary;
+  scannedPageUrl = state.pageUrl;
+  scannedPageTitle = state.pageTitle;
+  scannedPageSignature = state.pageSignature;
+  renderSession(activeSession);
+  renderSuggestions(state);
+  setStatus(state.status);
+  return true;
 }
 
 function hostPatternForUrl(tabUrl?: string) {
@@ -281,7 +388,7 @@ async function loadContextStatus() {
   if (activeSession) renderSession(activeSession);
 }
 
-function renderSuggestions() {
+function renderSuggestions(restored?: StoredReviewState) {
   if (!suggestionsForm || !suggestionsElement) return;
   suggestionsForm.hidden = suggestions.length === 0;
   suggestionsElement.replaceChildren();
@@ -295,8 +402,13 @@ function renderSuggestions() {
     checkbox.type = "checkbox";
     checkbox.name = "field";
     checkbox.value = suggestion.fieldId;
-    checkbox.checked = sensitivity === "normal" && suggestion.confidence >= 0.9 && !suggestion.isGenerated;
-    checkbox.addEventListener("change", updateFillButtonLabel);
+    checkbox.checked = restored
+      ? restored.selectedFieldIds.includes(suggestion.fieldId)
+      : sensitivity === "normal" && suggestion.confidence >= 0.9 && !suggestion.isGenerated;
+    checkbox.addEventListener("change", () => {
+      updateFillButtonLabel();
+      queuePersistReviewState();
+    });
 
     const body = document.createElement("div");
     const title = document.createElement("div");
@@ -309,7 +421,8 @@ function renderSuggestions() {
         : document.createElement("input");
     value.className = "value";
     value.dataset.fieldId = suggestion.fieldId;
-    value.value = suggestion.suggestedValue;
+    value.value = restored?.reviewedValues[suggestion.fieldId] ?? suggestion.suggestedValue;
+    value.addEventListener("input", queuePersistReviewState);
     if (value instanceof HTMLInputElement) {
       value.type = "text";
     }
@@ -400,6 +513,7 @@ function setAllSelections(selected: boolean) {
       input.checked = selected;
     });
   updateFillButtonLabel();
+  queuePersistReviewState();
 }
 
 function selectHighConfidence() {
@@ -416,6 +530,7 @@ function selectHighConfidence() {
       );
     });
   updateFillButtonLabel();
+  queuePersistReviewState();
 }
 
 function selectedSuggestionsFromDom() {
@@ -525,6 +640,10 @@ async function scanPage() {
 
   try {
     const tab = await activeTab();
+    if (activeTabId && tab.id !== activeTabId) {
+      throw new Error("This panel belongs to another tab. Open the extension from the current tab.");
+    }
+    activeTabId = tab.id;
     setStatus("Requesting access to this page...");
     await ensurePagePermission(tab);
     setStatus("Injecting page scanner...");
@@ -535,6 +654,9 @@ async function scanPage() {
     });
     detectedFields = scan.fields;
     scannedPageText = scan.visibleText ?? "";
+    scannedPageUrl = scan.pageUrl;
+    scannedPageTitle = scan.pageTitle;
+    scannedPageSignature = signatureFor(scan.fields);
 
     setStatus(`Found ${scan.fields.length} visible fields. Resolving session...`);
 
@@ -591,6 +713,7 @@ async function scanPage() {
         ? `Review suggestions and select fields to fill.${blockedMsg}`
         : `Found ${scan.fields.length} fields, but no suggestions yet.${blockedMsg}`,
     );
+    await persistReviewState();
   } catch (error) {
     setAnswerLoading(false);
     setStatus(error instanceof Error ? error.message : "Scan failed.");
@@ -612,6 +735,21 @@ async function fillSuggestions() {
   setStatus("Filling your confirmed selections...");
 
   try {
+    const tab = await activeTab();
+    if (tab.id !== lockedTabId()) {
+      throw new Error("Switch back to the tab that was scanned before filling.");
+    }
+    await ensureContentScripts(tab.id!);
+    const currentScan = await chrome.tabs.sendMessage<unknown, ScanResult>(tab.id!, {
+      type: "SCAN_VISIBLE_FIELDS",
+    });
+    if (
+      currentScan.pageUrl !== scannedPageUrl ||
+      signatureFor(currentScan.fields) !== scannedPageSignature
+    ) {
+      throw new Error("This application page changed. Rescan before filling these suggestions.");
+    }
+
     const fillResponse = await chrome.tabs.sendMessage<unknown, { results?: FillResult[] }>(lockedTabId(), {
       type: "FILL_SELECTED_FIELDS",
       fields: selectedSuggestions.map((suggestion) => ({
@@ -692,6 +830,7 @@ async function fillSuggestions() {
         ? `${filledCount} field(s) filled; ${failedCount} could not be filled. Review the page and rescan if needed.`
         : `${filledCount} field(s) filled. Review the page before continuing.`,
     );
+    await persistReviewState();
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Fill failed.");
   } finally {
@@ -719,8 +858,18 @@ toggleResumeButton?.addEventListener("click", () => {
 resumeFileInput?.addEventListener("change", loadResumeFile);
 saveResumeButton?.addEventListener("click", saveResume);
 tailorResumeButton?.addEventListener("click", tailorResumeFromScan);
-restoreCollapsedState();
-loadContextStatus().catch(() => {
-  contextSummary = undefined;
+async function initialize() {
+  await restoreCollapsedState();
+  activeTabId = requestedTabId();
+  const restored = activeTabId ? await restoreReviewState(activeTabId) : false;
+  if (!restored) {
+    loadContextStatus().catch(() => {
+      contextSummary = undefined;
+    });
+  }
+  await loadLatestResume();
+}
+
+initialize().catch((error) => {
+  setStatus(error instanceof Error ? error.message : "Could not initialize the extension.");
 });
-loadLatestResume();
