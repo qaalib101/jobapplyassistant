@@ -39,6 +39,7 @@
     "dob",
     "birth date",
     "birthday",
+    "pronoun",
   ];
 
   const categoryRules: Array<{ tokens: string[]; category: FieldCategory }> = [

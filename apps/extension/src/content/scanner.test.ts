@@ -44,6 +44,7 @@ const SENSITIVE_TOKENS = [
   "dob",
   "birth date",
   "birthday",
+  "pronoun",
 ];
 
 const CATEGORY_RULES: Array<{ tokens: string[]; category: FieldCategory }> = [
@@ -137,6 +138,7 @@ describe('classifySensitivity', () => {
     it('should classify gender fields as sensitive', () => {
       expect(classifySensitivity('Gender', 'gender', 'gender', 'select')).toBe('sensitive');
       expect(classifySensitivity('Sex', 'sex', 'sex', 'radio')).toBe('sensitive');
+      expect(classifySensitivity('Preferred Pronouns', 'pronouns', 'pronouns', 'select')).toBe('sensitive');
     });
 
     it('should classify race/ethnicity fields as sensitive', () => {

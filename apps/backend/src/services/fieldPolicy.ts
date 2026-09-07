@@ -25,6 +25,7 @@ const sensitiveTokens = [
   "dob",
   "birth date",
   "birthday",
+  "pronoun",
 ];
 
 const sensitivityRank: Record<FieldSensitivity, number> = {

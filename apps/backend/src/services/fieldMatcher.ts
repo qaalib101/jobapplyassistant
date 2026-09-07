@@ -5,28 +5,38 @@ import { effectiveSensitivity } from "./fieldPolicy";
 
 const profileFieldMap: Array<{
   tokens: string[];
-  column: string;
+  columns: string[];
   label: string;
+  namePart?: "first" | "last";
 }> = [
-  { tokens: ["first name", "given name"], column: "full_name", label: "first name" },
-  { tokens: ["last name", "family name", "surname"], column: "full_name", label: "last name" },
-  { tokens: ["full name", "legal name", "name"], column: "full_name", label: "full name" },
-  { tokens: ["email", "e mail"], column: "email", label: "email" },
-  { tokens: ["phone", "mobile", "telephone"], column: "phone", label: "phone" },
-  { tokens: ["current location", "location"], column: "location", label: "location" },
-  { tokens: ["linkedin"], column: "linkedin_url", label: "LinkedIn" },
-  { tokens: ["github"], column: "github_url", label: "GitHub" },
-  { tokens: ["portfolio", "website"], column: "portfolio_url", label: "portfolio" },
+  { tokens: ["preferred name", "chosen name"], columns: ["preferred_name"], label: "preferred name" },
+  { tokens: ["first name", "given name"], columns: ["first_name", "full_name"], label: "first name", namePart: "first" },
+  { tokens: ["middle name"], columns: ["middle_name"], label: "middle name" },
+  { tokens: ["last name", "family name", "surname"], columns: ["last_name", "full_name"], label: "last name", namePart: "last" },
+  { tokens: ["full name", "legal name", "your name"], columns: ["full_name"], label: "full name" },
+  { tokens: ["email address", "email", "e mail"], columns: ["email"], label: "email" },
+  { tokens: ["phone number", "mobile number", "phone", "mobile", "telephone"], columns: ["phone"], label: "phone" },
+  { tokens: ["street address", "address line 1", "home address"], columns: ["street_address"], label: "street address" },
+  { tokens: ["current city", "city"], columns: ["city"], label: "city" },
+  { tokens: ["state province", "state region", "state", "province", "region"], columns: ["state_region"], label: "state / region" },
+  { tokens: ["postal code", "zip code", "zipcode", "zip"], columns: ["postal_code"], label: "postal code" },
+  { tokens: ["country of residence", "country"], columns: ["country"], label: "country" },
+  { tokens: ["current location", "place of residence", "location"], columns: ["location"], label: "location" },
+  { tokens: ["linkedin"], columns: ["linkedin_url"], label: "LinkedIn" },
+  { tokens: ["github"], columns: ["github_url"], label: "GitHub" },
+  { tokens: ["portfolio", "personal website", "website"], columns: ["portfolio_url"], label: "portfolio" },
   {
-    tokens: ["authorized", "work authorization"],
-    column: "work_authorization",
+    tokens: ["legally authorized to work", "authorized to work", "work authorization", "employment authorization"],
+    columns: ["work_authorization"],
     label: "work authorization",
   },
-  { tokens: ["date of birth", "dob", "birth date", "birthday"], column: "date_of_birth", label: "date of birth" },
-  { tokens: ["gender", "sex"], column: "gender", label: "gender" },
-  { tokens: ["race", "ethnicity", "ethnic origin"], column: "race_ethnicity", label: "race / ethnicity" },
-  { tokens: ["disability", "disabled"], column: "disability_status", label: "disability status" },
-  { tokens: ["veteran", "military status"], column: "veteran_status", label: "veteran status" },
+  { tokens: ["date of birth", "dob", "birth date", "birthday"], columns: ["date_of_birth"], label: "date of birth" },
+  { tokens: ["gender identity"], columns: ["gender_identity"], label: "gender identity" },
+  { tokens: ["preferred pronouns", "pronouns", "pronoun"], columns: ["pronouns"], label: "pronouns" },
+  { tokens: ["gender", "sex"], columns: ["gender"], label: "gender" },
+  { tokens: ["race ethnicity", "race", "ethnicity", "ethnic origin"], columns: ["race_ethnicity"], label: "race / ethnicity" },
+  { tokens: ["disability status", "disability", "disabled"], columns: ["disability_status"], label: "disability status" },
+  { tokens: ["veteran status", "veteran", "military status"], columns: ["veteran_status"], label: "veteran status" },
 ];
 
 function fieldText(field: FieldMetadata) {
@@ -49,6 +59,8 @@ function optionValue(field: FieldMetadata, suggestedValue: string): string {
     (option) =>
       normalizeText(option.label) === normalizedSuggestion ||
       normalizeText(option.value) === normalizedSuggestion ||
+      equivalentOption(normalizeText(option.label), normalizedSuggestion) ||
+      equivalentOption(normalizeText(option.value), normalizedSuggestion) ||
       (booleanSuggestion !== null &&
         (yesNoToken(option.label) === booleanSuggestion ||
           yesNoToken(option.value) === booleanSuggestion)),
@@ -56,10 +68,20 @@ function optionValue(field: FieldMetadata, suggestedValue: string): string {
   return match?.value ?? suggestedValue;
 }
 
+const equivalentOptionGroups = [
+  new Set(["us", "usa", "united states", "united states of america"]),
+];
+
+function equivalentOption(left: string, right: string) {
+  return equivalentOptionGroups.some((group) => group.has(left) && group.has(right));
+}
+
 function yesNoToken(value: string | null | undefined): "yes" | "no" | null {
   const normalized = normalizeText(value);
   if (["yes", "y", "true"].includes(normalized)) return "yes";
   if (["no", "n", "false"].includes(normalized)) return "no";
+  if (/\b(?:not|isn t|aren t)\b.*\bauthorized\b.*\bwork\b/.test(normalized)) return "no";
+  if (/\bauthorized\b.*\bwork\b/.test(normalized)) return "yes";
   return null;
 }
 
@@ -80,6 +102,20 @@ function isPlaceholderProfileValue(value: string) {
 function fieldHasAny(text: string, tokens: string[]) {
   const padded = ` ${text} `;
   return tokens.some((token) => padded.includes(` ${normalizeText(token)} `));
+}
+
+function profileValue(
+  profile: Record<string, unknown>,
+  mapping: (typeof profileFieldMap)[number],
+) {
+  for (const column of mapping.columns) {
+    const raw = profile[column];
+    if (raw === null || raw === undefined || raw === "") continue;
+    let value = String(raw);
+    if (mapping.namePart && column === "full_name") value = splitName(value, mapping.namePart);
+    return { value, column };
+  }
+  return null;
 }
 
 function answerScore(fieldTextValue: string, answer: {
@@ -141,13 +177,11 @@ export async function deterministicSuggestions(
 
     for (const mapping of profileFieldMap) {
       if (!fieldHasAny(text, mapping.tokens)) continue;
-      const raw = profile[mapping.column];
-      if (!raw) continue;
+      const matchedProfile = profileValue(profile, mapping);
+      if (!matchedProfile) continue;
 
-      let value = String(raw);
+      let { value } = matchedProfile;
       if (isPlaceholderProfileValue(value)) continue;
-      if (mapping.label === "first name") value = splitName(value, "first");
-      if (mapping.label === "last name") value = splitName(value, "last");
 
       suggestions.push({
         fieldId: field.fieldId,
@@ -157,7 +191,7 @@ export async function deterministicSuggestions(
         confidence: 0.92,
         sourceType: "UserProfile",
         sourceIds: [userProfileId],
-        sourceContext: { matched: mapping.label, column: mapping.column },
+        sourceContext: { matched: mapping.label, column: matchedProfile.column },
         isGenerated: false,
         requiresUserReview: true,
       });

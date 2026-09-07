@@ -15,9 +15,16 @@
       <form>
         <div class="grid">
           <label class="full"><span>Legal Name</span><input name="legalName" required /></label>
+          <label><span>First Name</span><input name="firstName" required /></label>
+          <label><span>Preferred Name</span><input name="preferredName" /></label>
           <label><span>Primary Email</span><input type="email" name="primaryEmail" required /></label>
           <label><span>Phone</span><input type="tel" name="phone" /></label>
           <label class="full"><span>Current Location</span><input name="location" /></label>
+          <label class="full"><span>Street Address</span><input name="addressLine1" /></label>
+          <label><span>City</span><input name="city" /></label>
+          <label><span>State / Province</span><select name="state"><option value="">Select</option><option value="IL">Illinois</option></select></label>
+          <label><span>Postal Code</span><input name="postalCode" /></label>
+          <label><span>Country of Residence</span><select name="country"><option value="">Select</option><option value="US">United States</option></select></label>
         </div>
         <div class="actions">
           <a class="button secondary" href="/demos/">Cancel</a>

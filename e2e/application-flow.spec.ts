@@ -41,6 +41,7 @@ test.beforeAll(async ({ request }) => {
       email: "ada@lovelace.test",
       phone: "312-555-0101",
       location: "Chicago, IL",
+      streetAddress: "123 Analytical Engine Way",
       city: "Chicago",
       stateRegion: "IL",
       postalCode: "60601",
@@ -228,6 +229,13 @@ test("Workday: the user navigates each step and the extension only rescans", asy
   await confirmSelected(sidePanel);
   await expect(page).toHaveURL(/workday-personal\.html$/);
   await expect(page.locator('[name="legalName"]')).toHaveValue("Ada Lovelace");
+  await expect(page.locator('[name="firstName"]')).toHaveValue("Ada");
+  await expect(page.locator('[name="preferredName"]')).toHaveValue("Ada");
+  await expect(page.locator('[name="addressLine1"]')).toHaveValue("123 Analytical Engine Way");
+  await expect(page.locator('[name="city"]')).toHaveValue("Chicago");
+  await expect(page.locator('[name="state"]')).toHaveValue("IL");
+  await expect(page.locator('[name="postalCode"]')).toHaveValue("60601");
+  await expect(page.locator('[name="country"]')).toHaveValue("US");
 
   await page.getByRole("link", { name: "Next" }).click();
   await expect(page).toHaveURL(/workday-step\.html$/);
@@ -283,7 +291,7 @@ test("Stored protected answers require explicit confirmation while manual-only f
   expect(await prisma.filledFieldLog.count({ where: { application_session_id: session.id } })).toBe(6);
 });
 
-test("Context saving parses profile facts, preserves omitted values, and supports corrections", async ({ request }) => {
+test("Context saving parses profile facts, preserves omitted values, and supports corrections", async ({ request, page, sidePanel }) => {
   const firstSave = await request.put("/api/context", {
     data: {
       title: "Candidate profile",
@@ -326,6 +334,7 @@ Visa Sponsorship: Does not currently require sponsorship.`,
     },
   });
   expect(correction.ok()).toBeTruthy();
+  const correctionPayload = await correction.json();
 
   const correctedProfileResponse = await request.get("/api/profile");
   await expect(correctedProfileResponse.json()).resolves.toEqual(expect.objectContaining({
@@ -337,4 +346,14 @@ Visa Sponsorship: Does not currently require sponsorship.`,
     sponsorship_required: true,
   }));
   expect(await prisma.userContextDocument.count({ where: { is_active: true } })).toBe(1);
+
+  await page.goto("http://workday.localhost:4327/demos/workday-personal.html");
+  await scan(page, sidePanel);
+  await expect(suggestion(sidePanel, "Current Location").locator("input[type='text']"))
+    .toHaveValue("Saint Paul, Minnesota, USA");
+  const latestLocationSuggestion = await prisma.fieldSuggestion.findFirstOrThrow({
+    where: { field_label: "Current Location" },
+    orderBy: { created_at: "desc" },
+  });
+  expect(latestLocationSuggestion.context_revision_id).toBe(correctionPayload.id);
 });
