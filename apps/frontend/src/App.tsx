@@ -1,4 +1,10 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import {
+  profileFieldLabels,
+  summarizeParsing,
+  type ContextParseFieldResult,
+  type ContextParseResult,
+} from "./contextParsing";
 
 interface Profile {
   full_name?: string | null;
@@ -35,6 +41,7 @@ interface ContextDocument {
   content?: string;
   is_active?: boolean;
   updated_at?: string;
+  parsing?: ContextParseResult;
 }
 
 interface ResumeVersion {
@@ -136,6 +143,81 @@ function Panel({ children }: { children: React.ReactNode }) {
   return <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">{children}</section>;
 }
 
+const parsingStatusStyles: Record<ContextParseFieldResult["status"], string> = {
+  changed: "bg-emerald-100 text-emerald-800",
+  unchanged: "bg-slate-200 text-slate-700",
+  cleared: "bg-amber-100 text-amber-800",
+  needs_review: "bg-rose-100 text-rose-800",
+};
+
+function ParsingResults({ result, stale }: { result: ContextParseResult; stale: boolean }) {
+  const summary = summarizeParsing(result);
+
+  return (
+    <section
+      className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4"
+      aria-label="Parsed profile fields"
+      aria-live="polite"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="font-semibold text-slate-950">Parsed profile fields</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            These saved values are available to the extension the next time you scan a page.
+          </p>
+        </div>
+        {stale ? (
+          <span className="w-fit rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
+            Unsaved edits
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">{summary.changed} updated</span>
+        <span className="rounded-full bg-slate-200 px-2.5 py-1 text-slate-700">{summary.unchanged} unchanged</span>
+        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">{summary.cleared} cleared</span>
+        {summary.needs_review ? (
+          <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-800">
+            {summary.needs_review} need review
+          </span>
+        ) : null}
+      </div>
+
+      {result.fields.length ? (
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {result.fields.map((field) => (
+            <article key={field.field} className="rounded-md border border-slate-200 bg-white p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-900">{profileFieldLabels[field.field]}</div>
+                  <div className="mt-1 break-words text-sm text-slate-700">{formatValue(field.value)}</div>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${parsingStatusStyles[field.status]}`}>
+                  {field.status.replace("_", " ")}
+                </span>
+              </div>
+              {field.sourceLabel ? <div className="mt-2 text-xs text-slate-500">From: {field.sourceLabel}</div> : null}
+              {field.message ? <div className="mt-2 text-xs text-rose-700">{field.message}</div> : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-amber-800">
+          No structured profile fields were found. Use labels such as “Full Name:”, “Location:”, or “Work Authorization:”.
+        </p>
+      )}
+
+      {result.notFound.length ? (
+        <details className="mt-4 text-sm text-slate-600">
+          <summary className="cursor-pointer font-medium">Fields not found ({result.notFound.length})</summary>
+          <p className="mt-2">{result.notFound.map((field) => profileFieldLabels[field]).join(", ")}</p>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 export function App() {
   const [contextTitle, setContextTitle] = useState(defaultTitle);
   const [contextText, setContextText] = useState("");
@@ -147,6 +229,8 @@ export function App() {
   const [sourcesStatus, setSourcesStatus] = useState("Loading data sources...");
   const [sources, setSources] = useState<DataSources | null>(null);
   const [savingContext, setSavingContext] = useState(false);
+  const [contextParsing, setContextParsing] = useState<ContextParseResult | null>(null);
+  const [contextDirty, setContextDirty] = useState(false);
   const [savingResume, setSavingResume] = useState(false);
   const [loadingSources, setLoadingSources] = useState(false);
 
@@ -155,6 +239,7 @@ export function App() {
       const context = await api<ContextDocument>("/api/context");
       setContextTitle(context.title || defaultTitle);
       setContextText(context.content || "");
+      setContextDirty(false);
       setContextStatus("Saved context loaded.");
     } catch (error) {
       setContextStatus(error instanceof Error ? error.message : "Could not load context.");
@@ -193,7 +278,12 @@ export function App() {
           tags: ["general"],
         }),
       });
-      setContextStatus(`Saved ${(saved.content?.length ?? 0).toLocaleString()} characters.`);
+      setContextParsing(saved.parsing ?? null);
+      setContextDirty(false);
+      const parsedCount = saved.parsing?.fields.length ?? 0;
+      setContextStatus(
+        `Saved ${(saved.content?.length ?? 0).toLocaleString()} characters and parsed ${parsedCount} profile field${parsedCount === 1 ? "" : "s"}.`,
+      );
       await loadDataSources();
     } catch (error) {
       setContextStatus(error instanceof Error ? error.message : "Could not save context.");
@@ -251,9 +341,15 @@ export function App() {
     const profile = sources?.profile ?? {};
     return [
       ["Name", profile.full_name],
+      ["Preferred name", profile.preferred_name],
       ["Email", profile.email],
       ["Phone", profile.phone],
       ["Location", profile.location],
+      ["Street address", profile.street_address],
+      ["City", profile.city],
+      ["State / region", profile.state_region],
+      ["Postal code", profile.postal_code],
+      ["Country", profile.country],
       ["LinkedIn", profile.linkedin_url],
       ["GitHub", profile.github_url],
       ["Portfolio", profile.portfolio_url],
@@ -261,6 +357,8 @@ export function App() {
       ["Sponsorship", profile.sponsorship_required],
       ["Date of birth", profile.date_of_birth],
       ["Gender", profile.gender],
+      ["Gender identity", profile.gender_identity],
+      ["Pronouns", profile.pronouns],
       ["Race / ethnicity", profile.race_ethnicity],
       ["Disability", profile.disability_status],
       ["Veteran", profile.veteran_status],
@@ -297,7 +395,10 @@ export function App() {
             className="mb-4 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700"
             type="text"
             value={contextTitle}
-            onChange={(event) => setContextTitle(event.target.value)}
+            onChange={(event) => {
+              setContextTitle(event.target.value);
+              setContextDirty(true);
+            }}
           />
 
           <label className="mb-2 block font-semibold" htmlFor="contextText">
@@ -309,7 +410,10 @@ export function App() {
             spellCheck
             placeholder="Paste your resume text, career summary, preferred roles, work authorization, compensation preferences, projects, achievements, reusable answers, and anything else the AI should know."
             value={contextText}
-            onChange={(event) => setContextText(event.target.value)}
+            onChange={(event) => {
+              setContextText(event.target.value);
+              setContextDirty(true);
+            }}
           />
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -317,12 +421,14 @@ export function App() {
             <button
               className="rounded-md border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
               type="button"
-              disabled={savingContext}
+              disabled={savingContext || !contextDirty}
               onClick={saveContext}
             >
-              Save context
+              {savingContext ? "Saving and parsing..." : "Save and parse context"}
             </button>
           </div>
+
+          {contextParsing ? <ParsingResults result={contextParsing} stale={contextDirty} /> : null}
         </Panel>
 
         <Panel>

@@ -90,10 +90,23 @@ test("Companion UI saves reusable career context", async ({ page, request }) => 
 
   await page.getByLabel("Title", { exact: true }).fill("E2E career context");
   await page.getByLabel("AI context", { exact: true }).fill(
-    "Primary strengths: analytical engines, TypeScript platforms, and dependable documentation.",
+    `Full Name: Ada Lovelace
+Email: ada@lovelace.test
+Location: Chicago, IL
+Primary strengths: analytical engines, TypeScript platforms, and dependable documentation.`,
   );
-  await page.getByRole("button", { name: "Save context" }).click();
-  await expect(page.getByText(/Saved \d+ characters\./)).toBeVisible();
+  await page.getByRole("button", { name: "Save and parse context" }).click();
+  await expect(page.getByText(/Saved \d+ characters and parsed 7 profile fields\./)).toBeVisible();
+
+  const parsedFields = page.getByRole("region", { name: "Parsed profile fields" });
+  await expect(parsedFields).toContainText("7 unchanged");
+  await expect(parsedFields).toContainText("Full name");
+  await expect(parsedFields).toContainText("Ada Lovelace");
+  await expect(parsedFields).toContainText("From: Full Name");
+
+  await page.getByLabel("AI context", { exact: true }).pressSequentially("\nPronouns: they/them");
+  await expect(parsedFields.getByText("Unsaved edits")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save and parse context" })).toBeEnabled();
 
   const response = await request.get("/api/context");
   expect(response.ok()).toBeTruthy();
