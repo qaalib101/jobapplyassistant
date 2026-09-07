@@ -25,7 +25,10 @@ const sensitiveTokens = [
   "dob",
   "birth date",
   "birthday",
+  "age bracket",
+  "age range",
   "pronoun",
+  "sexual orientation",
 ];
 
 const sensitivityRank: Record<FieldSensitivity, number> = {

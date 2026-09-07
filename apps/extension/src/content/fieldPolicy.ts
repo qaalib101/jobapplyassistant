@@ -39,11 +39,14 @@
     "dob",
     "birth date",
     "birthday",
+    "age bracket",
+    "age range",
     "pronoun",
+    "sexual orientation",
   ];
 
   const categoryRules: Array<{ tokens: string[]; category: FieldCategory }> = [
-    { tokens: ["gender", "sex", "pronoun"], category: "gender" },
+    { tokens: ["gender", "sex", "pronoun", "sexual orientation"], category: "gender" },
     { tokens: ["race", "ethnicity", "ethnic", "ethnic origin"], category: "race" },
     { tokens: ["disability", "disabled", "impairment", "handicap"], category: "disability" },
     { tokens: ["veteran", "military", "armed forces", "army", "navy", "air force", "marine"], category: "veteran" },

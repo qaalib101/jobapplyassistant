@@ -79,6 +79,7 @@ describe("real scanner and filler scripts", () => {
     document.body.innerHTML = `
       <label>Email <input name="email" type="email" value="ada@example.com" /></label>
       <label>Gender <select name="gender"><option value="">Choose</option></select></label>
+      <label>Age Bracket <select name="age"><option value="">Choose</option></select></label>
       <label>Password <input name="password" type="password" /></label>
       <label>Agree <input name="agree" type="checkbox" checked /></label>
     `;
@@ -90,6 +91,7 @@ describe("real scanner and filler scripts", () => {
 
     expect(byName.get("email")).toMatchObject({ sensitivity: "normal", currentValue: "ada@example.com" });
     expect(byName.get("gender")).toMatchObject({ sensitivity: "sensitive", category: "gender" });
+    expect(byName.get("age")).toMatchObject({ sensitivity: "sensitive", category: "personal" });
     expect(byName.get("password")).toMatchObject({ sensitivity: "manual-only", category: "personal" });
     expect(byName.get("agree")).toMatchObject({ checked: true });
   });

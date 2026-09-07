@@ -81,6 +81,7 @@ export async function createSuggestions(input: {
           input_summary: {
             fieldCount: fieldsNeedingAi.length,
             contextLength: assembledContext.text.length,
+            contextRevisionId: assembledContext.summary.contextRevisionId,
             jobDescriptionProvided: Boolean(input.jobDescription),
           },
           output_summary: {
@@ -151,6 +152,7 @@ export async function createSuggestions(input: {
               purpose: "suggestion_generation_fallback",
               input_summary: {
                 fieldCount: fieldsNeedingAi.length,
+                contextRevisionId: assembledContext.summary.contextRevisionId,
                 fallbackFrom: provider.id,
               },
               output_summary: {

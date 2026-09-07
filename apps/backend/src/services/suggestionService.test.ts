@@ -100,4 +100,35 @@ describe("suggestion creation contracts", () => {
     expect(mocks.logBlockedFields).toHaveBeenCalledOnce();
     expect(result.suggestions).toEqual([]);
   });
+
+  it("sends the latest safe context to AI and records its revision", async () => {
+    mocks.deterministicSuggestions.mockResolvedValue({ suggestions: [], blockedFields: [] });
+    mocks.generateAnswerDrafts.mockResolvedValue([{
+      fieldId: "summary",
+      text: "A grounded draft",
+      confidence: 0.8,
+      sourceContext: { contextUsed: "saved context" },
+      provider: "mock",
+    }]);
+    mocks.createSuggestion.mockResolvedValue({ id: "suggestion-2" });
+
+    await createSuggestions({
+      applicationSessionId: "session-1",
+      pageSnapshotId: "snapshot-1",
+      userProfileId: "profile-1",
+      fields: [{ fieldId: "summary", label: "Tell us about your experience", type: "textarea" }],
+    });
+
+    expect(mocks.generateAnswerDrafts).toHaveBeenCalledWith(expect.objectContaining({
+      context: "known context",
+    }));
+    expect(mocks.createAiLog).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        input_summary: expect.objectContaining({ contextRevisionId: "context-revision-1" }),
+      }),
+    });
+    expect(mocks.createSuggestion).toHaveBeenCalledWith({
+      data: expect.objectContaining({ context_revision_id: "context-revision-1" }),
+    });
+  });
 });

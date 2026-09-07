@@ -10,6 +10,11 @@ describe("field policy", () => {
     expect(inferredSensitivity({ fieldId: "dob", label: "Date of birth", type: "text" })).toBe("sensitive");
   });
 
+  it("treats age brackets as protected without misclassifying ordinary text", () => {
+    expect(inferredSensitivity({ fieldId: "age", label: "Age Bracket", type: "select" })).toBe("sensitive");
+    expect(inferredSensitivity({ fieldId: "manager", label: "Management experience", type: "text" })).toBe("normal");
+  });
+
   it("does not allow client metadata to weaken inferred protection", () => {
     expect(
       effectiveSensitivity({
