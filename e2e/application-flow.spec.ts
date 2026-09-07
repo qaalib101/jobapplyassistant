@@ -151,6 +151,39 @@ test("Greenhouse: scans, uses mock AI, confirms, fills, and audits", async ({ pa
   expect(await prisma.suggestionDecisionLog.count({ where: { application_session_id: session.id, field_suggestion_id: { not: null } } })).toBeGreaterThan(5);
 });
 
+test("A corrected free-form answer grounds the next mock draft after rescan", async ({ page, sidePanel, request }) => {
+  const firstSave = await request.put("/api/context", { data: {
+    title: "Grounded answer test",
+    content: "Why interested: First saved answer.\nAge Bracket: private-context-marker",
+    tags: [],
+  } });
+  expect(firstSave.ok()).toBeTruthy();
+
+  await page.goto("http://greenhouse.localhost:4327/demos/greenhouse.html");
+  await scan(page, sidePanel);
+  await expect(suggestion(sidePanel, "Why are you interested").locator("textarea")).toHaveValue("First saved answer.");
+
+  const correctedSave = await request.put("/api/context", { data: {
+    title: "Grounded answer test corrected",
+    content: "Why interested: Corrected saved answer used after rescan.\nAge Bracket: private-context-marker",
+    tags: [],
+  } });
+  expect(correctedSave.ok()).toBeTruthy();
+  const correctedContext = await correctedSave.json();
+
+  await scan(page, sidePanel);
+  const correctedDraft = suggestion(sidePanel, "Why are you interested");
+  await expect(correctedDraft.locator("textarea")).toHaveValue("Corrected saved answer used after rescan.");
+  await expect(correctedDraft).not.toContainText("private-context-marker");
+  await expect(correctedDraft).toContainText("context: mock_saved_context");
+
+  const latestSuggestion = await prisma.fieldSuggestion.findFirstOrThrow({
+    where: { field_label: { contains: "Why are you interested" } },
+    orderBy: { created_at: "desc" },
+  });
+  expect(latestSuggestion.context_revision_id).toBe(correctedContext.id);
+});
+
 test("A pending review is restored only for its scanned tab and stale pages cannot fill", async ({
   context,
   extensionId,
@@ -292,13 +325,21 @@ test("Pinpoint-style: isolates nested labels and fills confirmed custom combobox
   await expect(page.locator("#country")).toHaveAttribute("data-value", "US");
   await expect(page.locator("#state")).toHaveAttribute("data-value", "IL");
   await expect(page.locator("#identity")).toHaveAttribute("data-value", "nonbinary");
+
+  await scan(page, sidePanel);
+  await sidePanel.getByRole("button", { name: "Clear" }).click();
+  const unmatchedCountry = suggestion(sidePanel, "Country");
+  await unmatchedCountry.locator("input.value").fill("Atlantis");
+  await unmatchedCountry.locator('input[type="checkbox"]').check();
+  await confirmSelected(sidePanel);
+  await expect(sidePanel.locator("#statusText")).toContainText("could not be filled: Country");
 });
 
 test("Stored protected answers require explicit confirmation while manual-only fields stay blocked", async ({ page, sidePanel }) => {
   await page.goto("http://privacy.localhost:4327/demos/protected-fields.html");
   await scan(page, sidePanel);
 
-  for (const label of ["Date of birth", "Gender", "Race / Ethnicity", "Disability status", "Veteran status"]) {
+  for (const label of ["Date of birth", "Age Bracket", "Gender", "Race / Ethnicity", "Disability status", "Veteran status"]) {
     const protectedSuggestion = suggestion(sidePanel, label);
     await expect(protectedSuggestion).toContainText("protected answer");
     await expect(protectedSuggestion.locator('input[type="checkbox"]')).not.toBeChecked();
@@ -310,6 +351,7 @@ test("Stored protected answers require explicit confirmation while manual-only f
 
   await expect(page.locator('[name="email"]')).toHaveValue("ada@lovelace.test");
   await expect(page.locator('[name="dateOfBirth"]')).toHaveValue("1990-12-10");
+  await expect(page.locator('[name="ageBracket"]')).toHaveValue("35-44");
   await expect(page.locator('[name="gender"]')).toHaveValue("Non-binary");
   await expect(page.locator('[name="race"]')).toHaveValue("Prefer not to say");
   await expect(page.locator('[name="disability"]')).toHaveValue("No, I do not have a disability");
@@ -322,7 +364,7 @@ test("Stored protected answers require explicit confirmation while manual-only f
   expect(await prisma.suggestionDecisionLog.count({
     where: { application_session_id: session.id, review_status: "blocked" },
   })).toBe(2);
-  expect(await prisma.filledFieldLog.count({ where: { application_session_id: session.id } })).toBe(6);
+  expect(await prisma.filledFieldLog.count({ where: { application_session_id: session.id } })).toBe(7);
 });
 
 test("Context saving parses profile facts, preserves omitted values, and supports corrections", async ({ request, page, sidePanel }) => {

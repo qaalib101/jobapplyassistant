@@ -215,5 +215,12 @@ describe("real scanner and filler scripts", () => {
     expect(response.results.every((result: any) => result.filled)).toBe(true);
     expect(document.getElementById("country")?.dataset.value).toBe("US");
     expect((document.getElementById("location") as HTMLInputElement).value).toBe("Chicago, IL");
+
+    const failed = await sendAsync(getListener(), {
+      type: "FILL_SELECTED_FIELDS",
+      fields: [{ fieldId: scan.fields[1].fieldId, value: "Atlantis" }],
+    });
+    expect(failed.results).toEqual([{ fieldId: scan.fields[1].fieldId, filled: false }]);
+    expect((document.getElementById("location") as HTMLInputElement).value).toBe("Chicago, IL");
   });
 });

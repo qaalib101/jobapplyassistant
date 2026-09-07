@@ -91,6 +91,38 @@ function booleanSuggestion(value: boolean | null | undefined) {
   return null;
 }
 
+function ageFromDateOfBirth(value: unknown, now = new Date()) {
+  if (typeof value !== "string") return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  let age = now.getUTCFullYear() - year;
+  if (now.getUTCMonth() + 1 < month || (now.getUTCMonth() + 1 === month && now.getUTCDate() < day)) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
+
+function ageBracketValue(field: FieldMetadata, dateOfBirth: unknown) {
+  const age = ageFromDateOfBirth(dateOfBirth);
+  if (age === null || !field.options?.length) return null;
+  const option = field.options.find((candidate) => {
+    const text = `${candidate.label} ${candidate.value}`
+      .toLowerCase()
+      .replace(/[–—]/g, "-")
+      .replace(/[^a-z0-9-]+/g, " ")
+      .trim();
+    const range = text.match(/\b(\d{1,3})\s*(?:to|-)\s*(\d{1,3})\b/);
+    if (range) return age >= Number(range[1]) && age <= Number(range[2]);
+    const lowerBound = text.match(/\b(\d{1,3})\s*(?:and|or)\s*(?:older|over|above)\b/);
+    if (lowerBound) return age >= Number(lowerBound[1]);
+    const upperBound = text.match(/\b(?:under|below)\s*(\d{1,3})\b/);
+    return upperBound ? age < Number(upperBound[1]) : false;
+  });
+  return option?.value ?? null;
+}
+
 function isPlaceholderProfileValue(value: string) {
   return (
     /@example\./i.test(value) ||
@@ -173,6 +205,25 @@ export async function deterministicSuggestions(
         reason: sensitivity,
       });
       continue;
+    }
+
+    if (fieldHasAny(text, ["age bracket", "age range"])) {
+      const value = ageBracketValue(field, profile.date_of_birth);
+      if (value) {
+        suggestions.push({
+          fieldId: field.fieldId,
+          fieldLabel: field.label,
+          fieldType: field.type,
+          suggestedValue: value,
+          confidence: 0.9,
+          sourceType: "UserProfile",
+          sourceIds: [userProfileId],
+          sourceContext: { matched: "age bracket derived from date of birth", column: "date_of_birth" },
+          isGenerated: false,
+          requiresUserReview: true,
+        });
+        continue;
+      }
     }
 
     for (const mapping of profileFieldMap) {

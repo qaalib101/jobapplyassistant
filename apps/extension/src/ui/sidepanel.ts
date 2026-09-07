@@ -829,9 +829,13 @@ async function fillSuggestions() {
       (suggestion) => resultsByField.get(suggestion.fieldId)?.filled,
     ).length;
     const failedCount = selectedSuggestions.length - filledCount;
+    const failedLabels = selectedSuggestions
+      .filter((suggestion) => !resultsByField.get(suggestion.fieldId)?.filled)
+      .map((suggestion) => suggestion.fieldLabel || suggestion.fieldId)
+      .join(", ");
     setStatus(
       failedCount > 0
-        ? `${filledCount} field(s) filled; ${failedCount} could not be filled. Review the page and rescan if needed.`
+        ? `${filledCount} field(s) filled; ${failedCount} could not be filled: ${failedLabels}. Review the page and rescan if needed.`
         : `${filledCount} field(s) filled. Review the page before continuing.`,
     );
     await persistReviewState();

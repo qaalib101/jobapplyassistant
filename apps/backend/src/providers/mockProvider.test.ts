@@ -59,6 +59,32 @@ describe('MockProvider', () => {
     expect(result[1].model).toBeUndefined();
   });
 
+  it('should deterministically ground matching questions in saved free-form context', async () => {
+    const result = await provider.generateAnswerDrafts({
+      fields: [{
+        field: { fieldId: 'interest', type: 'textarea' },
+        question: 'Why are you interested in this role?',
+      }],
+      context: `UPLOADED APPLICATION ASSISTANT CONTEXT
+Title: Candidate context
+Why interested: I enjoy building reliable products for real users.
+Age Bracket: [stored as protected profile data]
+
+STRUCTURED PROFILE DATA
+{}`,
+    });
+
+    expect(result[0]).toMatchObject({
+      text: 'I enjoy building reliable products for real users.',
+      confidence: 0.8,
+      sourceContext: {
+        contextUsed: 'mock_saved_context',
+        matchedContextLabel: 'why interested',
+      },
+    });
+    expect(result[0].text).not.toContain('stored as protected');
+  });
+
   it('should tailor resume', async () => {
     const input = {
       resumeText: 'My resume text here',

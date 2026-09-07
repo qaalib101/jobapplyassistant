@@ -108,6 +108,34 @@ describe("deterministic profile matching", () => {
     ]);
   });
 
+  it("derives a protected age-bracket option from the stored date of birth", async () => {
+    const now = new Date();
+    const birthYear = now.getUTCFullYear() - 30;
+    mocks.findProfile.mockResolvedValue({
+      id: "profile-1",
+      date_of_birth: `${birthYear}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`,
+    });
+
+    const result = await deterministicSuggestions("profile-1", [{
+      fieldId: "age-bracket",
+      label: "Age Bracket",
+      type: "select",
+      sensitivity: "sensitive",
+      options: [
+        { label: "Under 25", value: "under-25" },
+        { label: "25–34", value: "25-34" },
+        { label: "35–44", value: "35-44" },
+      ],
+    }]);
+
+    expect(result.blockedFields).toEqual([]);
+    expect(result.suggestions[0]).toMatchObject({
+      suggestedValue: "25-34",
+      sourceType: "UserProfile",
+      sourceContext: { column: "date_of_birth" },
+    });
+  });
+
   it("falls back to splitting full name only when structured name parts are missing", async () => {
     mocks.findProfile.mockResolvedValue({ full_name: "Grace Brewster Murray Hopper" });
 

@@ -229,7 +229,7 @@ AI_PROVIDER=none
 
 Saved-answer and profile matching still work when `AI_PROVIDER=none`. Resume tailoring selects a fallback when the primary provider is disabled or unconfigured; set `AI_FALLBACK_PROVIDER=none` as well if tailoring should also be unavailable.
 
-`AI_TIMEOUT_MS` controls generation timeouts (default `20000`), and `AI_MAX_CONTEXT_CHARS` caps assembled suggestion context (default `30000`). Mock mode returns placeholder drafts, not model-generated answers. For Ollama running on the host while the backend runs in Docker Desktop, use a container-reachable address such as `http://host.docker.internal:11434`.
+`AI_TIMEOUT_MS` controls generation timeouts (default `20000`), and `AI_MAX_CONTEXT_CHARS` caps assembled suggestion context (default `30000`). Mock mode returns deterministic saved-context answers for recognized labeled questions and placeholders otherwise; it never calls a model. For Ollama running on the host while the backend runs in Docker Desktop, use a container-reachable address such as `http://host.docker.internal:11434`.
 
 ## Build
 

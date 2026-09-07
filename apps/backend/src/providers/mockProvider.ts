@@ -1,6 +1,46 @@
 import { BatchAnswerInput, BatchAnswerResult, DraftAnswerInput, DraftAnswerResult } from "../types";
 import { BaseProvider } from "./baseProvider";
 
+const groundingRules: Array<{ question: RegExp; labels: string[] }> = [
+  { question: /why.*(?:interested|role)|interest.*role/i, labels: ["why interested", "role interest", "motivation"] },
+  { question: /tell.*about.*yourself|personal summary|professional summary/i, labels: ["professional summary", "personal summary", "about me"] },
+  { question: /cloud.*(?:infrastructure|platform|service)/i, labels: ["cloud infrastructure", "cloud platforms", "cloud experience"] },
+  { question: /working hours|work hours|availability/i, labels: ["preferred working hours", "working hours", "availability"] },
+  { question: /target compensation|salary expectation/i, labels: ["target compensation", "salary expectation"] },
+  { question: /how did you hear|source.*role/i, labels: ["how did you hear", "role source"] },
+  { question: /experience|strength/i, labels: ["relevant experience", "experience summary", "primary strengths"] },
+];
+
+function normalizeLabel(value: string) {
+  return value.replace(/[*_`]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function uploadedContextEntries(context: string) {
+  const uploaded = context
+    .split("UPLOADED APPLICATION ASSISTANT CONTEXT")[1]
+    ?.split("STRUCTURED PROFILE DATA")[0] ?? "";
+  const entries = new Map<string, string>();
+  for (const line of uploaded.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:[-*+]\s*)?([^:]{1,60}):\s*(.+)$/);
+    if (!match) continue;
+    const label = normalizeLabel(match[1]);
+    const value = match[2].trim();
+    if (label && value && value !== "[stored as protected profile data]") entries.set(label, value);
+  }
+  return entries;
+}
+
+function groundedAnswer(question: string, context: string) {
+  const rule = groundingRules.find((candidate) => candidate.question.test(question));
+  if (!rule) return null;
+  const entries = uploadedContextEntries(context);
+  for (const label of rule.labels) {
+    const value = entries.get(label);
+    if (value) return { text: value, label };
+  }
+  return null;
+}
+
 export class MockProvider extends BaseProvider {
   id = "mock";
   label = "Mock";
@@ -19,13 +59,15 @@ export class MockProvider extends BaseProvider {
   }
 
   async generateAnswerDraft(input: DraftAnswerInput): Promise<DraftAnswerResult> {
+    const grounded = groundedAnswer(input.question, input.context);
     return {
-      text: `Draft answer for "${input.question}". Review and personalize before using.`,
-      confidence: 0.35,
+      text: grounded?.text ?? `Draft answer for "${input.question}". Review and personalize before using.`,
+      confidence: grounded ? 0.8 : 0.35,
       sourceContext: {
-        contextUsed: "mock",
+        contextUsed: grounded ? "mock_saved_context" : "mock",
         fieldId: input.field.fieldId,
         jobDescriptionProvided: Boolean(input.jobDescription),
+        ...(grounded ? { matchedContextLabel: grounded.label } : {}),
       },
       provider: this.id,
       model: undefined
@@ -33,18 +75,22 @@ export class MockProvider extends BaseProvider {
   }
 
   async generateAnswerDrafts(input: BatchAnswerInput): Promise<BatchAnswerResult[]> {
-    return input.fields.map((field) => ({
-      fieldId: field.field.fieldId,
-      text: `Draft answer for "${field.question}". Review and personalize before using.`,
-      confidence: 0.35,
-      sourceContext: {
-        contextUsed: "mock_batch",
+    return input.fields.map((field) => {
+      const grounded = groundedAnswer(field.question, input.context);
+      return {
         fieldId: field.field.fieldId,
-        jobDescriptionProvided: Boolean(input.jobDescription),
-      },
-      provider: this.id,
-      model: undefined
-    }));
+        text: grounded?.text ?? `Draft answer for "${field.question}". Review and personalize before using.`,
+        confidence: grounded ? 0.8 : 0.35,
+        sourceContext: {
+          contextUsed: grounded ? "mock_saved_context" : "mock_batch",
+          fieldId: field.field.fieldId,
+          jobDescriptionProvided: Boolean(input.jobDescription),
+          ...(grounded ? { matchedContextLabel: grounded.label } : {}),
+        },
+        provider: this.id,
+        model: undefined,
+      };
+    });
   }
 
   async tailorResume(input: {

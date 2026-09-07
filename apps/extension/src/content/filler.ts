@@ -66,6 +66,7 @@
   }
 
   async function fillCustomCombobox(element: SupportedControl, value: string) {
+    const originalValue = element instanceof HTMLInputElement ? element.value : null;
     element.focus();
     element.click();
     if (element instanceof HTMLInputElement) setNativeValue(element, value);
@@ -79,6 +80,7 @@
       }
       await new Promise((resolve) => window.setTimeout(resolve, 50));
     }
+    if (element instanceof HTMLInputElement && originalValue !== null) setNativeValue(element, originalValue);
     return false;
   }
 
