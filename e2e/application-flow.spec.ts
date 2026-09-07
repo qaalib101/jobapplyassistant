@@ -269,3 +269,59 @@ test("Stored protected answers require explicit confirmation while manual-only f
   })).toBe(2);
   expect(await prisma.filledFieldLog.count({ where: { application_session_id: session.id } })).toBe(6);
 });
+
+test("Context saving parses profile facts, preserves omitted values, and supports corrections", async ({ request }) => {
+  const firstSave = await request.put("/api/context", {
+    data: {
+      title: "Candidate profile",
+      content: `Full Name: Qaalib Farah
+Location:
+Minneapolis, Minnesota, USA
+Email: qaalib@example.com
+Phone: (612) 249-2266
+LinkedIn URL: https://linkedin.com/in/qaalib
+Work Authorization: Authorized to work in the United States.
+Visa Sponsorship: Does not currently require sponsorship.`,
+      tags: ["general"],
+    },
+  });
+  expect(firstSave.ok()).toBeTruthy();
+  const firstPayload = await firstSave.json();
+  expect(firstPayload.parsing.contextRevisionId).toBe(firstPayload.id);
+  expect(firstPayload.parsing.fields).toEqual(expect.arrayContaining([
+    expect.objectContaining({ field: "location", value: "Minneapolis, Minnesota, USA" }),
+    expect.objectContaining({ field: "sponsorship_required", value: false }),
+  ]));
+
+  const parsedProfileResponse = await request.get("/api/profile");
+  await expect(parsedProfileResponse.json()).resolves.toEqual(expect.objectContaining({
+    full_name: "Qaalib Farah",
+    first_name: "Qaalib",
+    last_name: "Farah",
+    city: "Minneapolis",
+    state_region: "Minnesota",
+    country: "USA",
+    email: "qaalib@example.com",
+    sponsorship_required: false,
+  }));
+
+  const correction = await request.put("/api/context", {
+    data: {
+      title: "Corrected candidate profile",
+      content: "Location: Saint Paul, Minnesota, USA\nVisa Sponsorship: Yes\nPreferred Name: Not set",
+      tags: ["general"],
+    },
+  });
+  expect(correction.ok()).toBeTruthy();
+
+  const correctedProfileResponse = await request.get("/api/profile");
+  await expect(correctedProfileResponse.json()).resolves.toEqual(expect.objectContaining({
+    full_name: "Qaalib Farah",
+    email: "qaalib@example.com",
+    preferred_name: null,
+    location: "Saint Paul, Minnesota, USA",
+    city: "Saint Paul",
+    sponsorship_required: true,
+  }));
+  expect(await prisma.userContextDocument.count({ where: { is_active: true } })).toBe(1);
+});

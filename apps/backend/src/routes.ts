@@ -219,23 +219,31 @@ router.put("/context", async (req, res, next) => {
       })
       .parse(req.body);
 
-    await prisma.userContextDocument.updateMany({
-      where: { user_profile_id: profile.id },
-      data: { is_active: false, updated_at: new Date() },
-    });
+    const result = await prisma.$transaction(async (transaction) => {
+      await transaction.userContextDocument.updateMany({
+        where: { user_profile_id: profile.id },
+        data: { is_active: false, updated_at: new Date() },
+      });
 
-    const context = await prisma.userContextDocument.create({
-      data: {
-        user_profile_id: profile.id,
-        title: body.title,
-        content: body.content,
-        tags: body.tags,
-        source_type: "manual_text",
-        is_active: true,
-      },
+      const context = await transaction.userContextDocument.create({
+        data: {
+          user_profile_id: profile.id,
+          title: body.title,
+          content: body.content,
+          tags: body.tags,
+          source_type: "manual_text",
+          is_active: true,
+        },
+      });
+      const parsing = await syncProfileFromContext(
+        transaction,
+        profile.id,
+        body.content,
+        context.id,
+      );
+      return { context, parsing };
     });
-    await syncProfileFromContext(profile.id, body.content);
-    res.json(context);
+    res.json({ ...result.context, parsing: result.parsing });
   } catch (error) {
     next(error);
   }
