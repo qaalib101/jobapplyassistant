@@ -351,7 +351,7 @@ async function ensurePagePermission(tab: chrome.tabs.Tab) {
 async function ensureContentScripts(tabId: number) {
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["content/fieldPolicy.js", "content/scanner.js", "content/filler.js"],
+    files: ["content/fieldPolicy.js", "content/controlSupport.js", "content/scanner.js", "content/filler.js"],
   });
 }
 

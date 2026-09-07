@@ -44,6 +44,12 @@ function send(listener: MessageListener, message: Parameters<MessageListener>[0]
   return response;
 }
 
+function sendAsync(listener: MessageListener, message: Parameters<MessageListener>[0]) {
+  return new Promise<any>((resolve) => {
+    listener(message, {}, resolve);
+  });
+}
+
 describe("real scanner and filler scripts", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -66,6 +72,7 @@ describe("real scanner and filler scripts", () => {
       },
     });
     runContentScript("./fieldPolicy.ts");
+    runContentScript("./controlSupport.ts");
   });
 
   it("classifies protected fields and preserves current field state", () => {
@@ -87,7 +94,7 @@ describe("real scanner and filler scripts", () => {
     expect(byName.get("agree")).toMatchObject({ checked: true });
   });
 
-  it("fills explicitly selected protected fields but blocks manual-only fields", () => {
+  it("fills explicitly selected protected fields but blocks manual-only fields", async () => {
     document.body.innerHTML = `
       <label>Email <input name="email" type="email" /></label>
       <label>Gender <select name="gender"><option value="">Choose</option><option value="nonbinary">Non-binary</option></select></label>
@@ -100,7 +107,7 @@ describe("real scanner and filler scripts", () => {
 
     getListener = installChromeMock();
     runContentScript("./filler.ts");
-    const response = send(getListener(), {
+    const response = await sendAsync(getListener(), {
       type: "FILL_SELECTED_FIELDS",
       fields: [
         { fieldId: ids.get("email"), value: "ada@example.com" },
@@ -119,7 +126,7 @@ describe("real scanner and filler scripts", () => {
     expect((document.querySelector('[name="ssn"]') as HTMLInputElement).value).toBe("");
   });
 
-  it("scans and fills the checked-in Greenhouse demo form", () => {
+  it("scans and fills the checked-in Greenhouse demo form", async () => {
     document.documentElement.innerHTML = readFileSync(
       "../frontend/public/demos/greenhouse.html",
       "utf8",
@@ -136,12 +143,75 @@ describe("real scanner and filler scripts", () => {
 
     getListener = installChromeMock();
     runContentScript("./filler.ts");
-    const response = send(getListener(), {
+    const response = await sendAsync(getListener(), {
       type: "FILL_SELECTED_FIELDS",
       fields: [{ fieldId: firstName.fieldId, value: "Ada" }],
     });
 
     expect(response.results).toEqual([{ fieldId: firstName.fieldId, filled: true }]);
     expect((document.querySelector('[name="first_name"]') as HTMLInputElement).value).toBe("Ada");
+  });
+
+  it("isolates labels and fills button and searchable ARIA comboboxes", async () => {
+    document.body.innerHTML = `
+      <section>
+        <h2>Personal Details We'll need these details to contact you. Apply with LinkedIn</h2>
+        <div class="field" data-field>
+          <label id="country-label">Country</label>
+          <button id="country" data-name="country" role="combobox" aria-labelledby="country-label" aria-controls="country-options">Select...</button>
+          <div id="country-options" role="listbox" hidden>
+            <button role="option" data-option-value="US">United States</button>
+            <button role="option" data-option-value="CA">Canada</button>
+          </div>
+        </div>
+        <div class="field" data-field>
+          <label id="location-label">Current Location</label>
+          <input id="location" data-name="location" role="combobox" aria-labelledby="location-label" aria-controls="location-options" />
+          <div id="location-options" role="listbox" hidden>
+            <button role="option" data-option-value="chicago">Chicago, IL</button>
+            <button role="option" data-option-value="boston">Boston, MA</button>
+          </div>
+        </div>
+      </section>
+    `;
+    for (const combobox of Array.from(document.querySelectorAll<HTMLElement>("[role='combobox']"))) {
+      combobox.addEventListener("click", () => {
+        const list = document.getElementById(combobox.getAttribute("aria-controls") ?? "");
+        if (list) list.hidden = false;
+      });
+    }
+    for (const option of Array.from(document.querySelectorAll<HTMLElement>("[role='option']"))) {
+      option.addEventListener("click", () => {
+        const list = option.closest<HTMLElement>("[role='listbox']");
+        const combobox = document.querySelector<HTMLElement>(`[aria-controls='${list?.id}']`);
+        if (combobox instanceof HTMLInputElement) combobox.value = option.textContent?.trim() ?? "";
+        else if (combobox) combobox.dataset.value = option.dataset.optionValue;
+        if (list) list.hidden = true;
+      });
+    }
+
+    let getListener = installChromeMock();
+    runContentScript("./scanner.ts");
+    const scan = send(getListener(), { type: "SCAN_VISIBLE_FIELDS" });
+    expect(scan.fields).toHaveLength(2);
+    expect(scan.fields.map((field: any) => field.label)).toEqual(["Country", "Current Location"]);
+    expect(scan.fields[0]).toMatchObject({ name: "country", type: "select", options: [
+      { label: "United States", value: "US" },
+      { label: "Canada", value: "CA" },
+    ] });
+
+    getListener = installChromeMock();
+    runContentScript("./filler.ts");
+    const response = await sendAsync(getListener(), {
+      type: "FILL_SELECTED_FIELDS",
+      fields: [
+        { fieldId: scan.fields[0].fieldId, value: "USA" },
+        { fieldId: scan.fields[1].fieldId, value: "chicago" },
+      ],
+    });
+
+    expect(response.results.every((result: any) => result.filled)).toBe(true);
+    expect(document.getElementById("country")?.dataset.value).toBe("US");
+    expect((document.getElementById("location") as HTMLInputElement).value).toBe("Chicago, IL");
   });
 });

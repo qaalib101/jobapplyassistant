@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pinpoint-style Custom Controls Demo</title>
+    <link rel="stylesheet" href="/demos/demo.css" />
+    <style>
+      [role="listbox"] { border: 1px solid #cbd5e1; background: white; padding: .25rem; }
+      [role="option"] { display: block; width: 100%; padding: .5rem; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header><h1>Apply</h1><p>Pinpoint-style fixture with nested labels and custom searchable controls.</p></header>
+      <form>
+        <section>
+          <h2>1. Personal Details</h2>
+          <p>We'll need these details in order to contact you. Apply with LinkedIn</p>
+          <div class="grid">
+            <div class="field" data-field><label id="first-name-label">First Name</label><input name="firstName" aria-labelledby="first-name-label" /></div>
+            <div class="field" data-field><label id="linkedin-label">LinkedIn URL</label><input name="linkedinUrl" aria-labelledby="linkedin-label" /></div>
+            <div class="field" data-field>
+              <label id="country-label">Country</label>
+              <button type="button" id="country" data-name="country" role="combobox" aria-labelledby="country-label" aria-controls="country-options" aria-expanded="false"><span class="selection">Select...</span></button>
+              <div id="country-options" role="listbox" hidden><button type="button" role="option" data-option-value="US">United States</button><button type="button" role="option" data-option-value="CA">Canada</button></div>
+            </div>
+            <div class="field" data-field>
+              <label id="location-label">Current Location</label>
+              <input id="location" data-name="location" role="combobox" aria-labelledby="location-label" aria-controls="location-options" aria-expanded="false" placeholder="Start typing a location" />
+              <div id="location-options" role="listbox" hidden><button type="button" role="option" data-option-value="chicago-il">Chicago, IL</button><button type="button" role="option" data-option-value="minneapolis-mn">Minneapolis, Minnesota</button></div>
+            </div>
+            <div class="field" data-field>
+              <label id="state-label">State / Province</label>
+              <button type="button" id="state" data-name="state" role="combobox" aria-labelledby="state-label" aria-controls="state-options" aria-expanded="false"><span class="selection">Select...</span></button>
+              <div id="state-options" role="listbox" hidden><button type="button" role="option" data-option-value="IL">Illinois</button><button type="button" role="option" data-option-value="MN">Minnesota</button></div>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2>Diversity and Inclusion</h2>
+          <div class="field" data-field>
+            <label id="identity-label">Gender Identity</label>
+            <button type="button" id="identity" data-name="genderIdentity" role="combobox" aria-labelledby="identity-label" aria-controls="identity-options" aria-expanded="false"><span class="selection">Select...</span></button>
+            <div id="identity-options" role="listbox" hidden><button type="button" role="option" data-option-value="nonbinary">Non-binary</button><button type="button" role="option" data-option-value="woman">Woman</button><button type="button" role="option" data-option-value="decline">Prefer not to say</button></div>
+          </div>
+        </section>
+        <button type="submit">Submit Application</button>
+      </form>
+    </main>
+    <script>
+      for (const combobox of document.querySelectorAll('[role="combobox"]')) {
+        combobox.addEventListener('click', () => {
+          const list = document.getElementById(combobox.getAttribute('aria-controls'));
+          if (list) list.hidden = false;
+          combobox.setAttribute('aria-expanded', 'true');
+        });
+      }
+      for (const option of document.querySelectorAll('[role="option"]')) {
+        option.addEventListener('click', () => {
+          const list = option.closest('[role="listbox"]');
+          const combobox = document.querySelector(`[aria-controls="${list.id}"]`);
+          if (combobox instanceof HTMLInputElement) combobox.value = option.textContent.trim();
+          else {
+            combobox.dataset.value = option.dataset.optionValue;
+            combobox.querySelector('.selection').textContent = option.textContent.trim();
+          }
+          combobox.setAttribute('aria-expanded', 'false');
+          combobox.dispatchEvent(new Event('input', { bubbles: true }));
+          combobox.dispatchEvent(new Event('change', { bubbles: true }));
+          list.hidden = true;
+        });
+      }
+      document.querySelector('form').addEventListener('submit', (event) => event.preventDefault());
+    </script>
+  </body>
+</html>

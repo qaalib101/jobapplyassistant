@@ -54,6 +54,7 @@ try {
     "http://greenhouse.localhost:4327/*",
     "http://lever.localhost:4327/*",
     "http://workday.localhost:4327/*",
+    "http://pinpoint.localhost:4327/*",
     "http://privacy.localhost:4327/*",
   ];
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

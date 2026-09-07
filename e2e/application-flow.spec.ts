@@ -260,6 +260,40 @@ test("Workday: the user navigates each step and the extension only rescans", asy
   expect(sessions[0].filled_field_logs.every((log) => log.fill_succeeded)).toBe(true);
 });
 
+test("Pinpoint-style: isolates nested labels and fills confirmed custom comboboxes", async ({ page, sidePanel }) => {
+  await page.goto("http://pinpoint.localhost:4327/demos/pinpoint-custom.html");
+  await scan(page, sidePanel);
+
+  const session = await prisma.applicationSession.findFirstOrThrow({
+    where: { ats_domain: "pinpoint.localhost" },
+    include: { page_snapshots: { orderBy: { created_at: "desc" }, take: 1 } },
+  });
+  const snapshot = session.page_snapshots[0].field_snapshot as { fields: Array<{ label?: string }> };
+  const fields = snapshot.fields;
+  expect(fields.map((field) => field.label)).toEqual([
+    "First Name",
+    "LinkedIn URL",
+    "Country",
+    "Current Location",
+    "State / Province",
+    "Gender Identity",
+  ]);
+
+  const protectedIdentity = suggestion(sidePanel, "Gender Identity");
+  await expect(protectedIdentity).toContainText("protected answer");
+  await expect(protectedIdentity.locator('input[type="checkbox"]')).not.toBeChecked();
+  await protectedIdentity.locator('input[type="checkbox"]').check();
+  await confirmSelected(sidePanel);
+
+  await expect(page).toHaveURL(/pinpoint-custom\.html$/);
+  await expect(page.locator('[name="firstName"]')).toHaveValue("Ada");
+  await expect(page.locator('[name="linkedinUrl"]')).toHaveValue("https://linkedin.com/in/ada");
+  await expect(page.locator("#location")).toHaveValue("Chicago, IL");
+  await expect(page.locator("#country")).toHaveAttribute("data-value", "US");
+  await expect(page.locator("#state")).toHaveAttribute("data-value", "IL");
+  await expect(page.locator("#identity")).toHaveAttribute("data-value", "nonbinary");
+});
+
 test("Stored protected answers require explicit confirmation while manual-only fields stay blocked", async ({ page, sidePanel }) => {
   await page.goto("http://privacy.localhost:4327/demos/protected-fields.html");
   await scan(page, sidePanel);

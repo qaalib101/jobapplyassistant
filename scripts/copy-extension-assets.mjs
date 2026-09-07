@@ -14,6 +14,10 @@ await fs.copyFile(
   path.resolve("dist/apps/extension/src/content/fieldPolicy.js"),
   path.join(target, "content/fieldPolicy.js"),
 );
+await fs.copyFile(
+  path.resolve("dist/apps/extension/src/content/controlSupport.js"),
+  path.join(target, "content/controlSupport.js"),
+);
 
 await fs.copyFile(
   path.resolve("dist/apps/extension/src/background/serviceWorker.js"),
