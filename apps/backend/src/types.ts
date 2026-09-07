@@ -62,8 +62,53 @@ export interface Suggestion {
   provider?: string;
   model?: string;
   promptVersion?: string;
+  contextRevisionId?: string | null;
   isGenerated: boolean;
   requiresUserReview: true;
+}
+
+export type StructuredProfileField =
+  | "full_name"
+  | "first_name"
+  | "middle_name"
+  | "last_name"
+  | "preferred_name"
+  | "email"
+  | "phone"
+  | "location"
+  | "street_address"
+  | "city"
+  | "state_region"
+  | "postal_code"
+  | "country"
+  | "linkedin_url"
+  | "github_url"
+  | "portfolio_url"
+  | "work_authorization"
+  | "sponsorship_required"
+  | "date_of_birth"
+  | "gender"
+  | "gender_identity"
+  | "pronouns"
+  | "race_ethnicity"
+  | "disability_status"
+  | "veteran_status";
+
+export type ParsedProfileValue = string | boolean | null;
+
+export interface ContextParseFieldResult {
+  field: StructuredProfileField;
+  status: "changed" | "unchanged" | "cleared" | "needs_review";
+  value?: ParsedProfileValue;
+  previousValue?: ParsedProfileValue;
+  sourceLabel?: string;
+  message?: string;
+}
+
+export interface ContextParseResult {
+  contextRevisionId: string;
+  fields: ContextParseFieldResult[];
+  notFound: StructuredProfileField[];
 }
 
 export interface DraftAnswerInput {
@@ -136,6 +181,7 @@ export interface SuggestionResult {
     resumeCount: number;
     uploadedContextCount: number;
     uploadedContextChars: number;
+    contextRevisionId: string | null;
   };
 }
 

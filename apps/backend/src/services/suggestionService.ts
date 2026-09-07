@@ -188,6 +188,7 @@ export async function createSuggestions(input: {
       data: {
         application_session_id: input.applicationSessionId,
         page_snapshot_id: input.pageSnapshotId,
+        context_revision_id: assembledContext.summary.contextRevisionId,
         field_id: suggestion.fieldId,
         field_label: suggestion.fieldLabel ?? null,
         field_type: suggestion.fieldType,
@@ -203,7 +204,11 @@ export async function createSuggestions(input: {
         requires_user_review: true,
       },
     });
-    persistedSuggestions.push({ ...suggestion, id: created.id });
+    persistedSuggestions.push({
+      ...suggestion,
+      id: created.id,
+      contextRevisionId: assembledContext.summary.contextRevisionId,
+    });
   }
 
   // Log blocked fields in audit trail (no sensitive values stored)

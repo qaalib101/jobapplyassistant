@@ -9,6 +9,7 @@ export interface AssembledUserContext {
     resumeCount: number;
     uploadedContextCount: number;
     uploadedContextChars: number;
+    contextRevisionId: string | null;
   };
 }
 
@@ -72,7 +73,7 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
     }),
     prisma.userContextDocument.findMany({
       where: { user_profile_id: userProfileId, is_active: true },
-      select: { title: true, content: true, source_type: true, tags: true, updated_at: true },
+      select: { id: true, title: true, content: true, source_type: true, tags: true, updated_at: true },
       orderBy: { updated_at: "desc" },
       take: 5,
     }),
@@ -87,7 +88,10 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
   // Do not include them automatically in requests for unrelated AI-generated answers.
   const {
     date_of_birth: _dateOfBirth,
+    street_address: _streetAddress,
     gender: _gender,
+    gender_identity: _genderIdentity,
+    pronouns: _pronouns,
     race_ethnicity: _raceEthnicity,
     disability_status: _disabilityStatus,
     veteran_status: _veteranStatus,
@@ -131,6 +135,7 @@ export async function assembleUserContext(userProfileId: string): Promise<Assemb
       resumeCount: resumes.length,
       uploadedContextCount: contextDocuments.length,
       uploadedContextChars,
+      contextRevisionId: contextDocuments[0]?.id ?? null,
     },
   };
 }

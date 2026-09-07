@@ -35,9 +35,16 @@ test.beforeAll(async ({ request }) => {
   const profileResponse = await request.put("/api/profile", {
     data: {
       fullName: "Ada Lovelace",
+      firstName: "Ada",
+      lastName: "Lovelace",
+      preferredName: "Ada",
       email: "ada@lovelace.test",
       phone: "312-555-0101",
       location: "Chicago, IL",
+      city: "Chicago",
+      stateRegion: "IL",
+      postalCode: "60601",
+      country: "United States",
       linkedinUrl: "https://linkedin.com/in/ada",
       githubUrl: "https://github.com/ada",
       portfolioUrl: "https://ada.dev",
@@ -45,12 +52,32 @@ test.beforeAll(async ({ request }) => {
       sponsorshipRequired: false,
       dateOfBirth: "1990-12-10",
       gender: "Non-binary",
+      genderIdentity: "Non-binary",
+      pronouns: "they/them",
       raceEthnicity: "Prefer not to say",
       disabilityStatus: "No, I do not have a disability",
       veteranStatus: "I am not a protected veteran",
     },
   });
   expect(profileResponse.ok()).toBeTruthy();
+
+  const setMiddleName = await request.put("/api/profile", { data: { middleName: "Byron" } });
+  expect(setMiddleName.ok()).toBeTruthy();
+  const clearMiddleName = await request.put("/api/profile", { data: { middleName: null } });
+  expect(clearMiddleName.ok()).toBeTruthy();
+  const storedProfile = await request.get("/api/profile");
+  await expect(storedProfile.json()).resolves.toEqual(expect.objectContaining({
+    first_name: "Ada",
+    middle_name: null,
+    last_name: "Lovelace",
+    preferred_name: "Ada",
+    city: "Chicago",
+    state_region: "IL",
+    postal_code: "60601",
+    country: "United States",
+    gender_identity: "Non-binary",
+    pronouns: "they/them",
+  }));
 });
 
 test.afterAll(async () => {
@@ -101,6 +128,9 @@ test("Greenhouse: scans, uses mock AI, confirms, fills, and audits", async ({ pa
   });
   expect(await prisma.fieldSuggestion.count({ where: { application_session_id: session.id } })).toBeGreaterThan(5);
   expect(await prisma.fieldSuggestion.count({ where: { application_session_id: session.id, provider: "mock" } })).toBe(1);
+  expect(await prisma.fieldSuggestion.count({
+    where: { application_session_id: session.id, context_revision_id: { not: null } },
+  })).toBeGreaterThan(5);
   expect(await prisma.aIRequestLog.count({ where: { application_session_id: session.id, provider: "mock", success: true } })).toBe(1);
   expect(await prisma.filledFieldLog.count({ where: { application_session_id: session.id, fill_succeeded: true } })).toBeGreaterThan(5);
   expect(await prisma.filledFieldLog.count({ where: { application_session_id: session.id, field_suggestion_id: null } })).toBe(0);

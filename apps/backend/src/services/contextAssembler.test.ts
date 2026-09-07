@@ -38,8 +38,11 @@ describe("AI context assembly", () => {
     mocks.profile.mockResolvedValue({
       id: "profile-1",
       phone: "312-555-0101",
+      street_address: "protected-street",
       date_of_birth: "protected-dob",
       gender: "protected-gender",
+      gender_identity: "protected-gender-identity",
+      pronouns: "protected-pronouns",
       race_ethnicity: "protected-race",
       disability_status: "protected-disability",
       veteran_status: "protected-veteran",
@@ -48,8 +51,12 @@ describe("AI context assembly", () => {
     const result = await assembleUserContext("profile-1");
 
     expect(result.text).toContain("312-555-0101");
+    expect(result.text).not.toContain("protected-street");
     expect(result.text).not.toContain("protected-dob");
     expect(result.text).not.toContain("protected-gender");
+    expect(result.text).not.toContain("protected-gender-identity");
+    expect(result.text).not.toContain("protected-pronouns");
+    expect(result.summary.contextRevisionId).toBeNull();
     expect(result.text).not.toContain("protected-race");
     expect(result.text).not.toContain("protected-disability");
     expect(result.text).not.toContain("protected-veteran");
@@ -59,6 +66,7 @@ describe("AI context assembly", () => {
     mocks.profile.mockResolvedValue({ id: "profile-1" });
     mocks.contextDocuments.mockResolvedValue([
       {
+        id: "context-revision-1",
         title: "Application context",
         content: "Phone: 312-555-0101\nGender: protected-gender\nDate of Birth:\nprotected-dob",
       },
@@ -70,5 +78,6 @@ describe("AI context assembly", () => {
     expect(result.text).toContain("Gender: [stored as protected profile data]");
     expect(result.text).not.toContain("protected-gender");
     expect(result.text).not.toContain("protected-dob");
+    expect(result.summary.contextRevisionId).toBe("context-revision-1");
   });
 });

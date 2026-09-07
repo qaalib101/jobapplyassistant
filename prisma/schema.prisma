@@ -10,9 +10,18 @@ datasource db {
 model UserProfile {
   id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   full_name            String?
+  first_name           String?
+  middle_name          String?
+  last_name            String?
+  preferred_name       String?
   email                String?
   phone                String?
   location             String?
+  street_address       String?
+  city                  String?
+  state_region          String?
+  postal_code           String?
+  country               String?
   linkedin_url         String?
   github_url           String?
   portfolio_url        String?
@@ -20,6 +29,8 @@ model UserProfile {
   sponsorship_required Boolean?
   date_of_birth        String?
   gender               String?
+  gender_identity      String?
+  pronouns              String?
   race_ethnicity       String?
   disability_status    String?
   veteran_status       String?
@@ -181,6 +192,7 @@ model FieldSuggestion {
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   application_session_id String   @db.Uuid
   page_snapshot_id       String   @db.Uuid
+  context_revision_id    String?  @db.Uuid
   field_id               String
   field_label            String?
   field_type             String?
@@ -200,10 +212,12 @@ model FieldSuggestion {
 
   application_session ApplicationSession     @relation(fields: [application_session_id], references: [id], onDelete: Cascade)
   page_snapshot       ApplicationPageSnapshot @relation(fields: [page_snapshot_id], references: [id], onDelete: Cascade)
+  context_revision    UserContextDocument?    @relation(fields: [context_revision_id], references: [id], onDelete: SetNull)
   filled_field_logs        FilledFieldLog[]
   suggestion_decision_logs SuggestionDecisionLog[]
 
   @@index([page_snapshot_id], map: "field_suggestions_snapshot_idx")
+  @@index([context_revision_id], map: "field_suggestions_context_revision_idx")
   @@map("field_suggestions")
 }
 
@@ -285,6 +299,7 @@ model UserContextDocument {
   updated_at      DateTime @default(now()) @db.Timestamptz(6)
 
   user_profile UserProfile @relation(fields: [user_profile_id], references: [id], onDelete: Cascade)
+  field_suggestions FieldSuggestion[]
 
   @@index([user_profile_id, is_active, updated_at(sort: Desc)], map: "user_context_documents_profile_active_idx")
   @@map("user_context_documents")

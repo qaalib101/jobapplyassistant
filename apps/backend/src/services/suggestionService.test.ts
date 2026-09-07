@@ -36,6 +36,7 @@ describe("suggestion creation contracts", () => {
         resumeCount: 0,
         uploadedContextCount: 0,
         uploadedContextChars: 0,
+        contextRevisionId: "context-revision-1",
       },
     });
     mocks.createAiLog.mockResolvedValue({ id: "ai-log" });
@@ -70,6 +71,10 @@ describe("suggestion creation contracts", () => {
     });
 
     expect(result.suggestions[0].id).toBe("suggestion-1");
+    expect(result.suggestions[0].contextRevisionId).toBe("context-revision-1");
+    expect(mocks.createSuggestion).toHaveBeenCalledWith({
+      data: expect.objectContaining({ context_revision_id: "context-revision-1" }),
+    });
   });
 
   it("never sends a protected field to the AI provider", async () => {

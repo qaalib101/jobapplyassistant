@@ -42,6 +42,7 @@ interface Suggestion {
   sourceContext: Record<string, unknown>;
   provider?: string;
   model?: string;
+  contextRevisionId?: string | null;
   isGenerated: boolean;
   requiresUserReview: true;
 }
@@ -91,9 +92,11 @@ interface ContextSummary {
   resumeCount: number;
   uploadedContextCount: number;
   uploadedContextChars: number;
+  contextRevisionId: string | null;
 }
 
 interface ContextDocument {
+  id?: string;
   content?: string;
   is_active?: boolean;
 }
@@ -384,6 +387,7 @@ async function loadContextStatus() {
     resumeCount: resumes.length,
     uploadedContextCount: uploadedContextChars > 0 || context.is_active ? 1 : 0,
     uploadedContextChars,
+    contextRevisionId: context.id ?? null,
   };
   if (activeSession) renderSession(activeSession);
 }

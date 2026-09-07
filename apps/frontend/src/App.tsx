@@ -2,9 +2,18 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 
 interface Profile {
   full_name?: string | null;
+  first_name?: string | null;
+  middle_name?: string | null;
+  last_name?: string | null;
+  preferred_name?: string | null;
   email?: string | null;
   phone?: string | null;
   location?: string | null;
+  street_address?: string | null;
+  city?: string | null;
+  state_region?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
   linkedin_url?: string | null;
   github_url?: string | null;
   portfolio_url?: string | null;
@@ -12,6 +21,8 @@ interface Profile {
   sponsorship_required?: boolean | null;
   date_of_birth?: string | null;
   gender?: string | null;
+  gender_identity?: string | null;
+  pronouns?: string | null;
   race_ethnicity?: string | null;
   disability_status?: string | null;
   veteran_status?: string | null;
@@ -19,6 +30,7 @@ interface Profile {
 }
 
 interface ContextDocument {
+  id?: string;
   title?: string;
   content?: string;
   is_active?: boolean;
